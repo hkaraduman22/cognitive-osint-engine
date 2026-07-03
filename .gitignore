@@ -1,0 +1,14 @@
+# Gizli bilgiler
+.env
+
+# Python önbellek dosyaları
+__pycache__/
+*.py[cod]
+
+# İşletim sistemi dosyaları
+.DS_Store
+Thumbs.db
+
+# Sanal ortam dosyaları (Eğer ileride venv kullanırsan)
+venv/
+.venv/
