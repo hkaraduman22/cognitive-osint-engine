@@ -3,6 +3,15 @@ import json
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, ValidationError
+
+# --- Veri Sözleşmesi (Schema) ---
+class AnalizSonucu(BaseModel):
+    kisi_adi: str
+    unvan: str
+    firma_adi: str
+    guven_skoru: int = Field(ge=0, le=100)
+    analiz_tarihi: str
 
 # .env dosyasından API anahtarını yükle
 load_dotenv()
@@ -23,21 +32,24 @@ class AnalizMotoru:
             full_prompt = self.prompt_template.format(ham_metin=ham_metin)
             response = await asyncio.to_thread(self.model.generate_content, full_prompt)
             
-            text = response.text
-            print(f"DEBUG - LLM'den Gelen Ham Veri: {text}") # <--- BU SATIRI EKLEDİK
+            text = response.text.replace("```json", "").replace("```", "").strip()
             
-            # Temizlik
-            clean_text = text.replace("```json", "").replace("```", "").strip()
+            # JSON'ı sözlüğe çevir
+            data = json.loads(text)
             
-            # JSON'a çevir
-            return json.loads(clean_text)
+            # Pydantic ile "Sözleşme Doğrulaması" yap (Bekçi devrede!)
+            valid_data = AnalizSonucu(**data)
             
+            # Doğrulanmış veriyi sözlük olarak döndür
+            return valid_data.model_dump()
+            
+        except ValidationError as ve:
+            print(f"SÖZLEŞME HATASI (Veri formatı yanlış): {ve}")
+            return {"hata": "VALIDATION_ERROR", "detay": str(ve)}
         except Exception as e:
-            # Hata satırını da yazdır
-            import traceback
-            traceback.print_exc()
+            print(f"GENEL HATA: {e}")
             return {"hata": "JSON_PARSE_ERROR", "kisi_adi": "Analiz edilemedi"}
-        
+
 async def main():
     motor = AnalizMotoru()
     # Test verisi
