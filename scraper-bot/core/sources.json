@@ -14,7 +14,8 @@
       "search_param": "firma_adi",
       "extra_payload": {
         "kategori_id": ""
-      }
+      },
+      "link_selector": ".firmaci-card a"
     }
   }
 }

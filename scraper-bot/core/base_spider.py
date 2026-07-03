@@ -1,6 +1,5 @@
 from core.interfaces import IUrlFetcher, IHtmlParser, IDataStorage
 
-
 class BaseSpider:
     """Tek bir kaynak için veri toplama ve ayrıştırma iş akışını yöneten sınıf."""
 
@@ -14,10 +13,16 @@ class BaseSpider:
         urls = self._fetcher.fetch(query)
 
         for url in urls:
-            raw_text = self._parser.parse(url)
-            if raw_text:
+            parsed_data = self._parser.parse(url)
+
+            if parsed_data:
                 self._storage.save({
                     "kaynak": self._fetcher.source_id,
+                    "arama_kriteri": query,
                     "hedef_url": url,
-                    "ham_metin": raw_text
+                    "iletisim_bilgileri": {
+                        "telefonlar": parsed_data.get("telefonlar", []),
+                        "e_postalar": parsed_data.get("e_postalar", [])
+                    },
+                    "ham_metin": parsed_data.get("ham_metin", "")
                 })

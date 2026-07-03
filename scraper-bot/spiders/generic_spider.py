@@ -34,33 +34,46 @@ class GenericUrlFetcher(IUrlFetcher):
         self._initialize_session()
         method = self._config.get("method", "GET").upper()
         base_url = self._config.get("base_url", "")
-        urls: List[str] = []
 
         try:
             if method == "GET":
                 target_url = base_url.replace("{query}", query)
                 response = self._session.get(target_url, headers=self._headers, timeout=10)
             elif method == "POST":
-                target_url = base_url
                 param_name = self._config.get("search_param", "q")
                 payload = {param_name: query}
                 if "extra_payload" in self._config:
                     payload.update(self._config["extra_payload"])
-                response = self._session.post(target_url, headers=self._headers, data=payload, timeout=10)
+                response = self._session.post(base_url, headers=self._headers, data=payload, timeout=10)
             else:
                 return []
 
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
-            domain = "/".join(target_url.split('/')[:3]) + "/"
+            domain = "/".join(response.url.split('/')[:3]) + "/"
+            urls = []
 
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                if href.startswith(('http', '/')) and len(href) > 5:
-                    urls.append(urljoin(domain, href))
+            # Akıllı Link Seçici (Smart Link Selector)
+            css_selector = self._config.get("link_selector")
+            link_elements = soup.select(css_selector) if css_selector else soup.find_all('a', href=True)
+
+            for link in link_elements:
+                href = link.get('href')
+                if not href or href in ['#', '/', 'javascript:void(0);'] or href.startswith('mailto:'):
+                    continue
+
+                if href.startswith('http'):
+                    full_url = href
+                elif href.startswith('www.'):
+                    full_url = "https://" + href
+                else:
+                    full_url = urljoin(domain, href)
+
+                if len(full_url) > 10:
+                    urls.append(full_url)
 
             return list(set(urls))[:3]
 
-        except requests.exceptions.RequestException as e:
-            print(f"[-] {self._source_id} veri toplama hatası: {e}")
+        except Exception as e:
+            print(f"[-] {self._source_id} bağlantı hatası: {e}")
             return []
