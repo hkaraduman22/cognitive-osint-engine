@@ -1,0 +1,21 @@
+{
+  "istanbul": {
+    "osb": {
+      "method": "GET",
+      "base_url": "https://www.iso.org.tr/arama?q={query}",
+      "search_param": ""
+    }
+  },
+  "denizli": {
+    "osb": {
+      "method": "POST",
+      "init_url": "https://www.dosb.org.tr/",
+      "base_url": "https://www.dosb.org.tr/firmaara",
+      "search_param": "firma_adi",
+      "extra_payload": {
+        "kategori_id": ""
+      },
+      "link_selector": ".firmaci-card a"
+    }
+  }
+}
