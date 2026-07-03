@@ -10,10 +10,18 @@ Sistem 4 temel modülden oluşmaktadır:
 - **Yönetim Paneli (Delphi):** Görselleştirme ve raporlama.
 
 ## Geliştirici Notu (Geliştirici 3)
-Analiz motoru (nlp-analiz) iskeleti kurulmuştur. 
-- `analiz.py` dosyası üzerinden NLP mantığı geliştirilmektedir.
-- Veri formatı: JSON (Standardize edilmiştir).
+Analiz motoru (`nlp-analiz`) iskeleti kurulmuştur. 
+- `analiz.py` dosyası üzerinden NLP mantığı ve LLM entegrasyonu geliştirilmektedir.
+- **Veri Formatı:** Tüm sistemler arası iletişim JSON formatında standardize edilmiştir.
 
-## Kurulum
-1. Gerekli kütüphaneleri yükleyin: `pip install -r requirements.txt`
-2. Analiz modülünü test etmek için `python analiz.py` komutunu kullanın.
+## 🔗 Veri Sözleşmesi (Data Contract)
+Analiz motorundan çıkan (ve Altyapı/Delphi tarafından beklenen) veri paketi formatı:
+
+```json
+{
+  "kisi_adi": "string",
+  "unvan": "string",
+  "firma_adi": "string",
+  "guven_skoru": "int",
+  "analiz_tarihi": "YYYY-MM-DD"
+}
