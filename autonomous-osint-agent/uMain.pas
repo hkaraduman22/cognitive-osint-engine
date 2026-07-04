@@ -8,10 +8,12 @@ uses
   FireDAC.Stan.Option, FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS,
   FireDAC.Phys.Intf, FireDAC.DApt.Intf, Data.DB, FireDAC.Comp.DataSet,
   FireDAC.Comp.Client, REST.Response.Adapter, REST.Client, Data.Bind.Components,
-  Data.Bind.ObjectScope, Vcl.Grids, Vcl.DBGrids, Vcl.StdCtrls;
+  Data.Bind.ObjectScope, Vcl.Grids, Vcl.DBGrids, Vcl.StdCtrls,
+  System.Threading; // 2. Gün eklentisi: Asenkron işlemler (TTask) için zorunlu kütüphane
 
 type
   TfrmMain = class(TForm)
+    // 1. Gün Bileşenleri
     edtSehir: TEdit;
     cmbSektor: TComboBox;
     btnAra: TButton;
@@ -22,13 +24,18 @@ type
     RestAdapter: TRESTResponseDataSetAdapter;
     MemTableSonuclar: TFDMemTable;
     dsSonuclar: TDataSource;
-    procedure btnAraClick(Sender: TObject);
+
+    // 2. Gün Eklenen Bileşenler
+    btnTaramaBaslat: TButton;
+    RestRequestPOST: TRESTRequest;
+    RestResponsePOST: TRESTResponse;
+
     procedure FormCreate(Sender: TObject);
+    procedure btnAraClick(Sender: TObject);
+    procedure btnTaramaBaslatClick(Sender: TObject); // 2. Gün eklentisi
   private
-    { Private declarations }
     procedure APIyeBaglanVeAra(ASehir, ASektor: string);
   public
-    { Public declarations }
   end;
 
 var
@@ -40,24 +47,22 @@ implementation
 
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
-  // Uygulama açıldığında varsayılan ayarlar
   edtSehir.TextHint := 'Şehir Giriniz (Örn: Ankara)';
   cmbSektor.Text := 'Sektör Seçiniz';
 end;
 
+// --- 1. GÜN: VERİLERİ GETİR (GET) ---
 procedure TfrmMain.btnAraClick(Sender: TObject);
 begin
-  // Kullanıcı girişlerini alıp API servisine gönderiyoruz
   APIyeBaglanVeAra(edtSehir.Text, cmbSektor.Text);
 end;
 
 procedure TfrmMain.APIyeBaglanVeAra(ASehir, ASektor: string);
 begin
-  // Eski parametreleri temizle
   RestRequest.Params.Clear;
+  RestRequest.Method := rmGET;
+  RestRequest.Resource := 'companies';
 
-  // Endpoint: http://localhost:8000/api/v1/companies
-  // Eğer kullanıcı değer girdiyse Query Parameter olarak ekle
   if ASehir <> '' then
     RestRequest.AddParameter('sehir', ASehir, pkGETrsUnsaved);
 
@@ -65,28 +70,57 @@ begin
     RestRequest.AddParameter('sektor', ASektor, pkGETrsUnsaved);
 
   try
-    // İstegi Gönder
     RestRequest.Execute;
-
-    // Gelen HTTP Status Code 200 (OK) ise verileri göster
     if RestResponse.StatusCode = 200 then
-    begin
-      // RestAdapter otomatik olarak JSON'u MemTable'a çevirecek
-      // ve DBGrid üzerinde veriler "Vitrin" olarak listelenecek.
-      MemTableSonuclar.Open;
-    end
+      MemTableSonuclar.Open
     else
-    begin
       ShowMessage('API''den veri alınamadı. Hata Kodu: ' + IntToStr(RestResponse.StatusCode));
-    end;
   except
     on E: Exception do
-    begin
-      // Dev 1 henüz API'yi ayağa kaldırmadıysa bu hata düşer.
-      // 1. Gün için bu hatayı almak normaldir.
       ShowMessage('Core API henüz ayakta değil veya ulaşılamıyor: ' + E.Message);
-    end;
   end;
+end;
+
+// --- 2. GÜN: OSINT BOTUNU TETİKLE (ASENKRON POST) ---
+procedure TfrmMain.btnTaramaBaslatClick(Sender: TObject);
+begin
+  // Kullanıcıya bilgi veriyoruz (Arayüz kilitlenmeden işlemi arka plana atacağız)
+  ShowMessage('OSINT Taraması başlatılıyor. İşlem arka planda devam edecek...');
+
+  // Kullanıcı art arda basmasın diye butonu pasif yapıyoruz
+  btnTaramaBaslat.Enabled := False;
+
+  // İşlemi Ana Thread'den (UI) ayırıp arka plana (Task) gönderiyoruz
+  TTask.Run(procedure
+  begin
+    RestRequestPOST.Method := rmPOST;
+    RestRequestPOST.Resource := 'companies/scan'; // FastAPI'deki taramayı başlatan endpoint
+
+    try
+      RestRequestPOST.Execute;
+
+      // Arka plan işleminden arayüze (UI) güvenli bir şekilde geri dönmek için TThread.Queue kullanıyoruz
+      TThread.Queue(nil, procedure
+      begin
+        if RestResponsePOST.StatusCode = 202 then // 202 Accepted bekliyoruz
+          ShowMessage('Tarama başarıyla tetiklendi. Sistem veri toplamaya başladı.')
+        else
+          ShowMessage('Tarama başlatılamadı. API Dönüş Kodu: ' + IntToStr(RestResponsePOST.StatusCode));
+
+        btnTaramaBaslat.Enabled := True; // İşlem bitince butonu tekrar aktif et
+      end);
+
+    except
+      on E: Exception do
+      begin
+        TThread.Queue(nil, procedure
+        begin
+          ShowMessage('API bağlantı hatası oluştu: ' + E.Message);
+          btnTaramaBaslat.Enabled := True;
+        end);
+      end;
+    end;
+  end);
 end;
 
 end.
