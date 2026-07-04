@@ -1,48 +1,39 @@
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import unquote
 from typing import List
+from ddgs import DDGS
 from core.interfaces import IUrlFetcher
 
 
 class FreeGlobalUrlFetcher(IUrlFetcher):
-    """DuckDuckGo HTML versiyonunu POST metodu ile kazıyarak çalışan ücretsiz global toplayıcı."""
+    """Resmi ve güncel 'ddgs' kütüphanesini kullanan ücretsiz global toplayıcı."""
 
     @property
     def source_id(self) -> str:
         return "global_ddg"
 
     def fetch(self, query: str) -> List[str]:
-        target_url = "https://html.duckduckgo.com/html/"
-
-        # GET yerine POST yapıyoruz. DDG bunu gerçek bir form gönderimi sanıyor.
-        payload = {'q': f'{query} iletişim'}
-
-        # Mükemmel bir insan taklidi (Headers)
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0',
-            'Origin': 'https://html.duckduckgo.com',
-            'Referer': 'https://html.duckduckgo.com/',
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-
         urls = []
+        # Sadece kurumsal siteleri hedeflemek için sorguyu optimize ediyoruz
+        search_query = f"{query} kurumsal iletişim"
+
         try:
-            res = requests.post(target_url, headers=headers, data=payload, timeout=10)
+            # DDGS kütüphanesi HTTP 202
+            with DDGS() as ddgs:
+                # max_results=5 ile en iyi 5 sonucu çekiyoruz
+                results = ddgs.text(search_query, max_results=5)
 
-            if res.status_code != 200:
-                return []
+                for res in results:
+                    href = res.get("href", "")
+                    if href.startswith('http'):
+                        urls.append(href)
 
-            soup = BeautifulSoup(res.content, 'html.parser')
+            # Wikipedia, LinkedIn gibi OSINT için işimize yaramayacak ağları eliyoruz
+            yasakli_siteler = ['wikipedia.org', 'instagram.com', 'linkedin.com', 'facebook.com', 'twitter.com',
+                               'youtube.com']
+            final_urls = [u for u in urls if not any(yasakli in u.lower() for yasakli in yasakli_siteler)]
 
-            for a in soup.find_all('a', class_='result__url'):
-                href = a.get('href', '')
-                if 'uddg=' in href:
-                    # DDG'nin güvenlik yönlendirmesini temizleyip gerçek URL'yi alıyoruz
-                    actual_url = unquote(href.split('uddg=')[1].split('&')[0])
-                    urls.append(actual_url)
+            # Sadece en iyi 3 benzersiz kurumsal siteyi döndür
+            return list(set(final_urls))[:3]
 
-            return urls[:3]
         except Exception as e:
             print(f"[-] Global API Hatası: {e}")
             return []

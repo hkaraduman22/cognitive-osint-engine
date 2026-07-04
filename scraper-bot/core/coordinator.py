@@ -7,38 +7,44 @@ from core.config_loader import ConfigLoader
 from spiders.generic_spider import GenericUrlFetcher
 from spiders.global_spider import FreeGlobalUrlFetcher
 
-class DataDrivenCoordinator:
-    """Sorgu kriterlerine göre kaynakları filtreleyen ve paralel olarak çalıştıran koordinatör sınıf."""
 
+class DataDrivenCoordinator:
     def __init__(self, parser: IHtmlParser, storage: IDataStorage, config_path: str = "sources.json"):
         self._parser = parser
         self._storage = storage
         self._sources_db: Dict[str, Any] = ConfigLoader.load_sources(config_path)
 
     def _resolve_fetchers(self, query: str) -> Tuple[List[IUrlFetcher], str]:
-        """Sorgu metnindeki lokasyon verilerine göre uygun kaynakları belirler ve sorguyu temizler."""
         normalized_query = query.lower()
-        selected_fetchers: List[IUrlFetcher] = []
+
+        # Her zaman DuckDuckGo'yu (Global) ekle! Bu sayede veri havuzumuz hep geniş kalır.
+        selected_fetchers: List[IUrlFetcher] = [FreeGlobalUrlFetcher()]
+
         cleaned_query = query
+        city_found = False
 
         for city, components in self._sources_db.items():
             if city in normalized_query:
+                city_found = True
+
+                # Şehir adını sorgudan siliyoruz ki hedef sitenin arama motoru bozulmasın
                 compiled_clean = re.compile(re.escape(city), re.IGNORECASE)
                 cleaned_query = compiled_clean.sub("", cleaned_query).strip()
 
+                # Şehir bulunduysa, o şehre özel OSB ve Rehber botlarını da orduya kat
                 if "osb" in components:
                     selected_fetchers.append(GenericUrlFetcher(f"{city}_osb", components["osb"]))
-                if "to" in components:
-                    selected_fetchers.append(GenericUrlFetcher(f"{city}_to", components["to"]))
+                if "rehber" in components:
+                    selected_fetchers.append(GenericUrlFetcher(f"{city}_rehber", components["rehber"]))
 
-        if not selected_fetchers:
-            print("[!] Eşleşen yerel kaynak bulunamadı. Ücretsiz DuckDuckGo OSINT moduna geçiliyor.")
-            selected_fetchers.append(FreeGlobalUrlFetcher())
+                break  # Sadece ilk eşleşen şehri almak yeterli
+
+        if not city_found:
+            print("[!] Eşleşen yerel kaynak bulunamadı. Sadece Global OSINT (DuckDuckGo) kullanılacak.")
 
         return selected_fetchers, cleaned_query
 
     def execute(self, query: str) -> None:
-        """Filtrelenen tüm toplayıcıları iş parçacığı havuzunda asenkron olarak yürütür."""
         fetchers, cleaned_query = self._resolve_fetchers(query)
 
         print(f"[!] {len(fetchers)} adet tarayıcı bot eşzamanlı olarak başlatılıyor...\n")
@@ -48,4 +54,7 @@ class DataDrivenCoordinator:
                 for fetcher in fetchers
             ]
             for future in futures:
-                future.result()
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"[-] İş parçacığı hatası: {e}")
