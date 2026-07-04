@@ -49,6 +49,12 @@ class SearchHistoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ScraperTriggerRequest(BaseModel):
+    target_domain: str
+    keyword: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Bot'tan veya arka plandan gelen şirket verisi için kullanılacak DTO
 class CompanyCreate(BaseModel):
     name: str = Field(..., max_length=256)
