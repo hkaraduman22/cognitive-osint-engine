@@ -58,3 +58,14 @@ class BotLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="bot_logs")
+
+
+class Company(Base):
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_name = Column(String(256), nullable=False)
+    city = Column(String(128), nullable=True)
+    sector = Column(String(128), nullable=True)
+    confidence_score = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

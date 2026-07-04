@@ -1,11 +1,21 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.database import engine
+from app import models
 from app.routers.auth_router import router as auth_router
 from app.routers.company_router import router as company_router
 from app.routers.log_router import router as log_router
 from app.routers.personnel_router import router as personnel_router
 from app.routers.scraper_router import router as scraper_router
+
+# Ensure database tables exist on startup
+models.Base.metadata.create_all(bind=engine)
+
+# Configure root logging so module loggers (logger.info/err) are visible in uvicorn output
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="OSINT Search API")
 
