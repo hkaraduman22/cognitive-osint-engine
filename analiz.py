@@ -29,8 +29,8 @@ class AnalizMotoru:
         self.model = None
         self.prompt_template = """
         Şu ham metni oku. İçindeki kişinin adını, unvanını ve şirket adını bul.
-        Ayrıca metnin güvenilirliğine göre 0-100 arasında bir güven skoru ver.
-        Sadece geçerli bir JSON çıktısı ver. Başka açıklama ekleme.
+        Eğer bir bilgi bulamazsan, o alana "Belirsiz" yaz, kesinlikle boş (null) bırakma.
+        Sadece geçerli bir JSON çıktısı ver.
         Format: {{"kisi_adi": "...", "unvan": "...", "firma_adi": "...", "guven_skoru": 80, "analiz_tarihi": "2026-07-03"}}
         Metin: {ham_metin}
         """
