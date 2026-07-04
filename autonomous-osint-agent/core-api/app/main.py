@@ -1,11 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# 1. Base sınıfını engine ile birlikte içe aktar
+from app.database import engine, Base
+from app import models
 from app.routers.auth_router import router as auth_router
 from app.routers.company_router import router as company_router
 from app.routers.log_router import router as log_router
 from app.routers.personnel_router import router as personnel_router
 from app.routers.scraper_router import router as scraper_router
+
+# 2. models.Base yerine doğrudan Base kullan
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="OSINT Search API")
 
