@@ -1,4 +1,3 @@
-# Gizli bilgiler
 .env
 
 # Python önbellek dosyaları
@@ -9,6 +8,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Sanal ortam dosyaları (Eğer ileride venv kullanırsan)
+# Sanal ortam dosyaları 
 venv/
 .venv/
+
+*.db
+test_analiz.py
+temp.py
