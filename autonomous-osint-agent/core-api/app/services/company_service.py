@@ -13,15 +13,16 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
         existing_company.industry = company_in.industry
         existing_company.confidence_score = company_in.confidence_score
 
-        existing_company.officials.clear()
-        for official_in in company_in.officials:
-            existing_company.officials.append(
-                CompanyOfficial(
-                    full_name=official_in.full_name,
-                    title=official_in.title,
-                    linkedin_url=official_in.linkedin_url,
+        if company_in.officials is not None:
+            existing_company.officials.clear()
+            for official_in in company_in.officials:
+                existing_company.officials.append(
+                    CompanyOfficial(
+                        full_name=official_in.full_name,
+                        title=official_in.title,
+                        linkedin_url=official_in.linkedin_url,
+                    )
                 )
-            )
 
         db.add(existing_company)
         db.commit()
@@ -35,14 +36,15 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
         confidence_score=company_in.confidence_score,
     )
 
-    for official_in in company_in.officials:
-        company.officials.append(
-            CompanyOfficial(
-                full_name=official_in.full_name,
-                title=official_in.title,
-                linkedin_url=official_in.linkedin_url,
+    if company_in.officials:
+        for official_in in company_in.officials:
+            company.officials.append(
+                CompanyOfficial(
+                    full_name=official_in.full_name,
+                    title=official_in.title,
+                    linkedin_url=official_in.linkedin_url,
+                )
             )
-        )
 
     db.add(company)
     db.commit()

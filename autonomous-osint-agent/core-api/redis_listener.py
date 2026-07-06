@@ -38,7 +38,7 @@ logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s %(levelname)s %(message
 logger = logging.getLogger("redis_listener")
 
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint:raw_text")
 COMPANY_API_URL = os.getenv("COMPANY_API_URL", "http://127.0.0.1:8000/api/v1/companies")
 COMPANY_API_KEY = os.getenv("COMPANY_API_KEY")
@@ -196,10 +196,7 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
         "Sana internetten kazınmış ham bir metin vereceğim. Bu metni analiz et. "
         "Eğer içeride bir firmanın adı, şehri ve faaliyet gösterdiği sektör net olarak geçiyorsa bunları ayıkla. "
         "Bulduğun verilerin doğruluğuna ve netliğine 0 ile 100 arasında bir confidence_score ver. "
-        'Çıktıyı kesinlikle ve sadece şu JSON formatında dön: '
-        '{"name": "...", "city": "...", "industry": "...", "confidence_score": 90, "officials": [{"full_name": "...", "title": "...", "linkedin_url": "..."}]}'
-        " Eğer gerçek resmi bir yetkili yoksa officials dizisine en az bir tanımla "
-        'full_name: "Unknown", title: "Unknown", linkedin_url: null gibi bir placeholder ekle."
+        'Çıktıyı kesinlikle ve sadece şu JSON formatında dön: {"name": "...", "city": "...", "industry": "...", "confidence_score": 90}'
     )
 
     # Build prompt
@@ -245,7 +242,6 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
     city = parsed.get("city")
     industry = parsed.get("industry")
     confidence = parsed.get("confidence_score")
-    officials = parsed.get("officials")
 
     try:
         confidence = int(confidence)
@@ -253,23 +249,8 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
         logger.warning("confidence_score numeric değil veya yok; veri elendi")
         return
 
-    if not isinstance(officials, list) or len(officials) == 0:
-        officials = [
-            {
-                "full_name": "Unknown",
-                "title": "Unknown",
-                "linkedin_url": None,
-            }
-        ]
-
     if confidence >= 85:
-        payload = {
-            "name": name,
-            "city": city,
-            "industry": industry,
-            "confidence_score": confidence,
-            "officials": officials,
-        }
+        payload = {"name": name, "city": city, "industry": industry, "confidence_score": confidence, "officials": []}
         ok, status = post_company_to_api(payload)
         if ok:
             logger.info("Elit veri API'ye gönderildi (status=%s): %s", status, name)

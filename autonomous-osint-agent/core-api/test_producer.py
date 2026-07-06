@@ -8,7 +8,7 @@ except ImportError:
 
 load_dotenv()
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint:raw_text")
 
 DIRTY_HTML = '''

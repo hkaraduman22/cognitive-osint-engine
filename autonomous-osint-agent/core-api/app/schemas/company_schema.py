@@ -26,15 +26,9 @@ class CompanyCreate(BaseModel):
     industry: Optional[str] = Field(None, max_length=256)
     city: Optional[str] = Field(None, max_length=128)
     confidence_score: int = Field(..., ge=85, le=100)
-    officials: List[CompanyOfficialCreate] = Field(..., min_length=1)
+    officials: Optional[List[CompanyOfficialCreate]] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-    @validator("officials")
-    def officials_must_not_be_empty(cls, value: List[CompanyOfficialCreate]):
-        if not value:
-            raise ValueError("A company must include at least one official.")
-        return value
 
 
 class CompanyOfficialResponse(BaseModel):
