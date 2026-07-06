@@ -7,7 +7,7 @@ class RedisDataStorage(IDataStorage):
     """Verileri Redis listesine (Queue) atan Producer sınıfı."""
     def __init__(self, host: str = 'localhost', port: int = 6379, db: int = 0):
         self.r = redis.Redis(host=host, port=port, db=db, decode_responses=True)
-        self.queue_name = "osint_raw_queue"
+        self.queue_name = "osint:raw_text"
 
     def save(self, data: Dict[str, Any]) -> None:
         """Veriyi JSON formatında Redis kuyruğuna ekler."""
