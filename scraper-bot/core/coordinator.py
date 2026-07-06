@@ -17,7 +17,6 @@ class DataDrivenCoordinator:
     def _resolve_fetchers(self, query: str) -> Tuple[List[IUrlFetcher], str]:
         normalized_query = query.lower()
 
-        # THE FAN-OUT STRATEGY: 4 Farklı DDG Botu (Gecikmeli Başlatma)
         selected_fetchers: List[IUrlFetcher] = [
             FreeGlobalUrlFetcher(suffix="", delay=0.0),
             FreeGlobalUrlFetcher(suffix="OSB", delay=0.5),

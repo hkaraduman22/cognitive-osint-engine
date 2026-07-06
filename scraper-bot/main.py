@@ -25,9 +25,7 @@ def main() -> None:
     coordinator = DataDrivenCoordinator(parser=parser, storage=storage, ai_engine=ai_engine)
     coordinator.execute(args.sorgu)
 
-    # -----------------------------------------------------------------
-    # GELİŞTİRİCİ TEST ÇIKTILARI (Sadece senin debug yapman için var)
-    # -----------------------------------------------------------------
+    ##Test'ler içi
     veriler = storage.get_all()
     print("\n" + "=" * 70)
     print(f" TARAMA TAMAMLANDI | RAM Bellekteki Toplam Firma Kaydı: {len(veriler)}")

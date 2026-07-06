@@ -14,7 +14,7 @@ class FreeGlobalUrlFetcher(IUrlFetcher):
 
     @property
     def source_id(self) -> str:
-        # Botun adını suffix'e göre dinamik yapıyoruz (Örn: global_ddg_osb)
+        # Botun adını suffix'e göre dinamik yapıyoruz
         if self._suffix:
             clean_suffix = self._suffix.strip().replace(" ", "_").lower()
             return f"{self._base_id}_{clean_suffix}"

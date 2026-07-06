@@ -8,8 +8,6 @@ project_root = os.path.abspath(os.path.join(current_dir, "../../"))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from analiz import AnalizMotoru
-
 
 class BaseSpider:
     """Tek bir kaynak için veri toplama ve ayrıştırma iş akışını yöneten sınıf."""
