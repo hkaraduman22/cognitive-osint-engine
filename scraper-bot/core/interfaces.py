@@ -27,3 +27,8 @@ class IHtmlParser(ABC):
     @abstractmethod
     def parse(self, url: str) -> Optional[Dict[str, Any]]:
         pass
+
+class IAiEngine(ABC):
+    @abstractmethod
+    async def analiz_et(self, ham_metin: str) -> Dict[str, Any]:
+        pass

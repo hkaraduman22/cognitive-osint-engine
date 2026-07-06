@@ -20,7 +20,7 @@ class GeneralHtmlParser(IHtmlParser):
         self._banned_protocols = ('mailto:', 'tel:', 'javascript:')
         self._banned_domains = ['facebook.com', 'twitter.com', 'linkedin.com', 'sharer']
         self._directory_sites = ['bulurum.com', 'dosb.org.tr', '11880.com.tr']
-        self._contact_keywords = ['iletisim', 'contact', 'hakkinda', 'about', 'iletişim', 'hakkında']
+        self._contact_keywords = ['iletisim', 'contact', 'hakkinda', 'about', 'iletişim', 'hakkında','hakkimizda','hakkımızda','home']
 
     def parse(self, url: str) -> Optional[Dict[str, Any]]:
         """Ana orkestrasyon metodu."""
