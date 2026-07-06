@@ -49,6 +49,8 @@ async def run_scraper_background(target_domain: str, keyword: str) -> list[dict]
             response.raise_for_status()
             html = response.text
 
+        logger.info("HTML fetched from %s, bytes=%d", target_domain, len(html))
+
         soup = BeautifulSoup(html, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
@@ -56,10 +58,12 @@ async def run_scraper_background(target_domain: str, keyword: str) -> list[dict]
         extracted_text = "\n".join(soup.stripped_strings)
         logger.info("HTML metni başarıyla temizlendi. Karakter sayısı: %d", len(extracted_text))
     except httpx.HTTPError as exc:
-        logger.error("Hedef domain %s ile HTTP hatası oluştu: %s", target_domain, exc)
+        logger.exception("Hedef domain %s ile HTTP hatası oluştu", target_domain)
+        print(f"HTTP error fetching {target_domain}: {exc}", flush=True)
         return []
     except Exception as exc:
-        logger.error("Hedef domain %s için temizleme sırasında hata: %s", target_domain, exc)
+        logger.exception("Hedef domain %s için temizleme sırasında hata", target_domain)
+        print(f"Error cleaning HTML for {target_domain}: {exc}", flush=True)
         return []
 
     if not extracted_text:
@@ -67,7 +71,6 @@ async def run_scraper_background(target_domain: str, keyword: str) -> list[dict]
         return []
 
     logger.info("🧠 LLM analizi yapılıyor (gpt-4o-mini)...")
-    
     system_prompt = (
         "Sen uzman bir OSINT veri ayıklama ajanısın. Sana verilen web sitesi metnini analiz et. "
         "Bu metin içindeki şirket çalışanlarını, yöneticileri veya personeli bul. "
@@ -110,24 +113,25 @@ async def run_scraper_background(target_domain: str, keyword: str) -> list[dict]
             )
             response.raise_for_status()
             llm_response = response.json()
-
         llm_text = llm_response["choices"][0]["message"]["content"].strip()
-        
-        # Markdown kod bloklarını (```json ... ```) temizlemek için önlem
+        logger.info("Received LLM response (choices=%d)", len(llm_response.get("choices", [])))
+
+        # Markdown code block cleanup
         if llm_text.startswith("```"):
             llm_text = llm_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
-        try:
-            personnel_results = json.loads(llm_text)
-        except json.JSONDecodeError:
-            logger.error("LLM yanıtı JSON'a parse edilemedi: %s", llm_text)
-            personnel_results = []
     except httpx.HTTPError as exc:
-        logger.error("LLM isteği sırasında hata oluştu: %s", exc)
+        logger.exception("LLM isteği sırasında hata oluştu")
         return []
     except Exception as exc:
-        logger.error("LLM işlemi sırasında beklenmeyen hata: %s", exc)
+        logger.exception("LLM işlemi sırasında beklenmeyen hata")
         return []
+
+    try:
+        personnel_results = json.loads(llm_text)
+    except json.JSONDecodeError:
+        logger.error("LLM yanıtı JSON'a parse edilemedi: %s", llm_text)
+        personnel_results = []
 
     logger.info("🎉 LLM personel çıkarımı sonucu başarıyla terminale yazdırıldı:\n%s", json.dumps(personnel_results, indent=2, ensure_ascii=False))
     return personnel_results
