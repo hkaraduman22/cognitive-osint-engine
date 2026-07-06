@@ -8,11 +8,10 @@ from spiders.generic_spider import GenericUrlFetcher
 from spiders.global_spider import FreeGlobalUrlFetcher
 
 class DataDrivenCoordinator:
-    def __init__(self, parser: IHtmlParser, storage: IDataStorage,ai_engine: IAiEngine, config_path: str = "sources.json"):
+    def __init__(self, parser: IHtmlParser, storage: IDataStorage, config_path: str = "sources.json"):
         self._parser = parser
         self._storage = storage
         self._sources_db: Dict[str, Any] = ConfigLoader.load_sources(config_path)
-        self._ai_engine = ai_engine
 
     def _resolve_fetchers(self, query: str) -> Tuple[List[IUrlFetcher], str]:
         normalized_query = query.lower()
@@ -51,7 +50,7 @@ class DataDrivenCoordinator:
         print(f"[!] Toplam {len(fetchers)} adet tarayıcı bot eşzamanlı olarak başlatılıyor...\n")
         with ThreadPoolExecutor(max_workers=len(fetchers)) as executor:
             futures = [
-                executor.submit(BaseSpider(fetcher, self._parser, self._storage,self._ai_engine).run, cleaned_query)
+                executor.submit(BaseSpider(fetcher, self._parser, self._storage).run, cleaned_query)
                 for fetcher in fetchers
             ]
             for future in futures:
