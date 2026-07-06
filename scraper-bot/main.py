@@ -1,9 +1,8 @@
 import argparse
 from core.storage import RamDataStorage
 from core.coordinator import DataDrivenCoordinator
-# İthalat yolu düzeltildi (GeneralHtmlParser artık html_parser içinde)
 from spiders.html_parser import GeneralHtmlParser
-
+from analiz import AnalizMotoru
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Multi-Source OSINT Data-Driven Engine")
@@ -21,8 +20,9 @@ def main() -> None:
 
     storage = RamDataStorage()
     parser = GeneralHtmlParser()
+    ai_engine = AnalizMotoru()
 
-    coordinator = DataDrivenCoordinator(parser=parser, storage=storage)
+    coordinator = DataDrivenCoordinator(parser=parser, storage=storage, ai_engine=ai_engine)
     coordinator.execute(args.sorgu)
 
     # -----------------------------------------------------------------
@@ -37,6 +37,7 @@ def main() -> None:
         print(f"\n{i}. [{veri['kaynak'].upper()}] -> {veri['hedef_url']}")
         print(f"   E-postalar : {veri['iletisim_bilgileri']['e_postalar']}")
         print(f"   Telefonlar : {veri['iletisim_bilgileri']['telefonlar']}")
+        print(f"   AI Analizi : {veri['ai_analizi']}")
         print(f"   Metin (İlk 150 Karakter): {veri['ham_metin'][:150]}...")
     print("=" * 70)
 
