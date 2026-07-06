@@ -1,7 +1,7 @@
 import redis
 import json
 from typing import Dict, Any, List
-from core.interfaces import IDataStorage
+from interfaces import IDataStorage
 
 class RedisDataStorage(IDataStorage):
     """Verileri Redis listesine (Queue) atan Producer sınıfı."""
