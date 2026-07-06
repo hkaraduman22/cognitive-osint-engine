@@ -1,6 +1,8 @@
 # Gizli bilgiler
 .env
 
+.idea
+
 # Python önbellek dosyaları
 __pycache__/
 *.py[cod]
