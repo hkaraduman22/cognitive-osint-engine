@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import re
 import urllib.error
@@ -27,6 +28,8 @@ class AnalizSonucu(BaseModel):
 
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class AnalizMotoru:
@@ -152,7 +155,15 @@ class AnalizMotoru:
 
             # 4. Sadece 85 ve üzeri güven skoruna sahip olanları süz
             elites = [item for item in results if item.get("confidence_score", 0) >= 85]
-            
+            rejected = [item for item in results if item.get("confidence_score", 0) < 85]
+
+            logger.info(
+                "Bugün %s veri bulundu, %s elit kabul edildi, %s düşük skor nedeniyle elendi",
+                len(results),
+                len(elites),
+                len(rejected),
+            )
+
             # 5. API'ye gönderim (Eğer API adresi tanımlıysa)
             if elites and self.api_url:
                 status, error = await asyncio.to_thread(self._post_companies_to_api, elites)

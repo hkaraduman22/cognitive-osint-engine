@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -50,6 +51,24 @@ def test_analiz_et_filters_elite_companies() -> None:
     # "Düşük Güven"in (70 puan) ise filtrede elenmesi gerekir:
     assert len(elite_results) == 1
     assert elite_results[0]["name"] == "Elit Yazılım"
+
+
+def test_analiz_et_logs_rejected_low_confidence_results(caplog) -> None:
+    motor = AnalizMotoru()
+    motor.model = MagicMock()
+    motor.model.generate_content.return_value = MagicMock(
+        text='''[
+            {"name":"Elit Yazılım","website":"https://elit.com","location":"İstanbul","description":"Yapay zeka platformu","source":"web","confidence_score":90},
+            {"name":"Düşük Güven","website":"https://dusuk.com","location":"Ankara","description":"Hizmet sağlayıcı","source":"web","confidence_score":70}
+        ]'''
+    )
+
+    with caplog.at_level(logging.INFO):
+        asyncio.run(motor.analiz_et("Bu metin şirket bilgilerini içeriyor."))
+
+    assert "Bugün 2 veri bulundu" in caplog.text
+    assert "1 elit kabul edildi" in caplog.text
+    assert "1 düşük skor nedeniyle elendi" in caplog.text
 
 
 def test_analiz_et_invalid_json_returns_fallback() -> None:
