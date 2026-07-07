@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d osintdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:8-alpine
@@ -20,11 +25,15 @@ services:
   api:
     build: .
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:password@postgres:5432/osintdb
       JWT_SECRET: supersecretchangeme
+      REDIS_URL: redis://redis:6379/0
+      COMPANY_API_URL: http://127.0.0.1:8000/api/v1/companies
     ports:
       - "8000:8000"
     volumes:

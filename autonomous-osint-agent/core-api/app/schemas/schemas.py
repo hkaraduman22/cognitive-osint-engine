@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .company_schema import CompanyCreate, CompanyResponse
+
 
 # API girişleri için: kullanıcı kayıt / login verisi
 class UserCreate(BaseModel):
@@ -55,29 +57,8 @@ class ScraperTriggerRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# Bot'tan veya arka plandan gelen şirket verisi için kullanılacak DTO
-class CompanyCreate(BaseModel):
-    name: str = Field(..., max_length=256)
-    website: Optional[str]
-    location: Optional[str]
-    description: Optional[str]
-    source: Optional[str]
-    confidence_score: Optional[int]
-    model_config = ConfigDict(from_attributes=True)
-
-
-# Delphi'ye veya API kayıtlarını listelerken dönecek temizlenmiş şirket verisi
-class CompanyResponse(BaseModel):
-    id: int
-    name: str
-    website: Optional[str]
-    location: Optional[str]
-    description: Optional[str]
-    source: Optional[str]
-    confidence_score: Optional[int]
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
+# Company DTO'ları tek kaynak olarak company_schema.py içinde tanımlanmıştır.
+# Buradaki import, app.schemas.schemas üzerinden erişimi korur.
 
 
 # Bot'tan LLM'den gelen personel verisi için zorunlu confidence_score alanı
