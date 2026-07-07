@@ -1,13 +1,13 @@
 import redis
 import json
 from typing import Dict, Any, List
-from interfaces import IDataStorage
+from core.interfaces import IDataStorage
 
 class RedisDataStorage(IDataStorage):
     """Verileri Redis listesine (Queue) atan Producer sınıfı."""
     def __init__(self, host: str = 'localhost', port: int = 6379, db: int = 0):
         self.r = redis.Redis(host=host, port=port, db=db, decode_responses=True)
-        self.queue_name = "osint:raw_text"
+        self.queue_name = "osint_raw_queue"
 
     def save(self, data: Dict[str, Any]) -> None:
         """Veriyi JSON formatında Redis kuyruğuna ekler."""

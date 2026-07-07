@@ -1,113 +1,61 @@
+import sys
+import os
+import json
 import asyncio
 import logging
-import os
-from typing import Any
-
-from dotenv import load_dotenv
-
-from analiz import AnalizMotoru
 
 try:
     import redis.asyncio as aioredis
-except ImportError:  # pragma: no cover
+except ImportError:
     aioredis = None
 
-load_dotenv()
+from analiz import AnalizMotoru
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger(__name__)
-
-DEFAULT_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-DEFAULT_QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint:raw_text")
-BRPOP_TIMEOUT = int(os.getenv("OSINT_REDIS_BRPOP_TIMEOUT", "5"))
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger("Worker")
 
 
-class RedisSwarmListener:
-    def __init__(self, queue_name: str = DEFAULT_QUEUE_NAME, redis_url: str = DEFAULT_REDIS_URL):
-        if aioredis is None:
-            raise RuntimeError(
-                "redis paketini yüklemeden Redis dinleyicisi başlatılamaz. pip install redis"
-            )
+async def worker_loop():
+    if aioredis is None:
+        print("Hata: redis paketi yüklü değil (pip install redis)")
+        return
 
-        self.queue_name = queue_name
-        self.redis_url = redis_url
-        self.motor = AnalizMotoru()
-        self.redis: aioredis.Redis | None = None
+    r = await aioredis.from_url("redis://localhost:6379/0", decode_responses=True)
+    ai_engine = AnalizMotoru()
 
-    async def connect(self) -> None:
-        self.redis = aioredis.from_url(self.redis_url, decode_responses=True)
-        try:
-            await self.redis.ping()
-            logger.info("Redis'e bağlandı: %s", self.redis_url)
-        except Exception as exc:
-            raise RuntimeError(f"Redis bağlantısı kurulamadı: {exc}") from exc
+    print("Worker başlatıldı. Redis kuyruğu dinleniyor...")
 
-    async def process_text(self, ham_metin: str) -> list[dict[str, Any]]:
-        if not ham_metin or not ham_metin.strip():
-            logger.warning("Boş metin alındı, işlem atlanıyor")
-            return []
+    counter = 1
+    while True:
+        data_json = await r.lpop("osint_raw_queue")
 
-        logger.info("Metin işleniyor, LLM analizine gönderiliyor")
-        result = await self.motor.analiz_et(ham_metin)
-        logger.info(
-            "Metin işlendi: %d sonuç, %d elit",
-            len(result),
-            sum(1 for item in result if item.get("confidence_score", 0) >= 85),
-        )
-        return result
-
-    async def listen(self) -> None:
-        if self.redis is None:
-            await self.connect()
-
-        logger.info("Redis kuyruğu dinleniyor: %s", self.queue_name)
-        while True:
+        if data_json:
             try:
-                message = await self.redis.brpop(self.queue_name, timeout=BRPOP_TIMEOUT)
-                if message is None:
-                    continue
+                data = json.loads(data_json)
+                ham_metin = data.get("ham_metin", "")
+                kaynak = data.get("kaynak", "Bilinmeyen")
+                hedef_url = data.get("hedef_url", "Bilinmeyen")
+            except json.JSONDecodeError:
+                ham_metin = data_json
+                data = {}
+                kaynak = "Bilinmeyen"
+                hedef_url = "Bilinmeyen"
 
-                _, ham_metin = message
-                if not ham_metin or not ham_metin.strip():
-                    logger.warning("Kuyruktan boş mesaj alındı, atlanıyor")
-                    continue
+            try:
+                ai_sonuc = await ai_engine.analiz_et(ham_metin)
+            except Exception as e:
+                ai_sonuc = [{"hata": "WORKER_ANALIZ_HATASI", "detay": str(e)}]
 
-                await self.process_text(ham_metin)
+            print(f"\n{counter}. [{kaynak.upper()}] -> {hedef_url}")
+            print(f"   Yyapay Zeka Analizi: {len(ai_sonuc)} şirket bulundu.")
+            print(f"   Metin (Karakter Sayısı): {len(ham_metin)}")
+            print("-" * 50)
 
-            except asyncio.CancelledError:
-                logger.info("Dinleyici iptal edildi")
-                break
-            except Exception as exc:
-                logger.exception("Kuyruktan veri işlenirken hata oluştu: %s", exc)
-                await asyncio.sleep(2)
+            counter += 1
+            await asyncio.sleep(5)
+        else:
+            await asyncio.sleep(1)
 
-
-async def main() -> None:
-    listener = RedisSwarmListener()
-    await listener.listen()
-
-
-async def debug_test_kuyrugu():
-    # Gerçek Redis'e ihtiyaç duymadan sistemi simüle et
-    print("--- SÜRÜ (SWARM) SİMÜLASYONU BAŞLIYOR ---")
-    listener = RedisSwarmListener()
-    # AnalizMotoru zaten hazır, sadece bir test metni verelim
-    test_metni = "ABC Teknoloji, Türkiye'nin önde gelen yapay zeka şirketidir."
-    await listener.process_text(test_metni)
-    print("--- SİMÜLASYON BAŞARILI ---")
 
 if __name__ == "__main__":
-    # Docker yerine bu simülasyonu çalıştır
-    asyncio.run(debug_test_kuyrugu())
-
-
-# redis_listener.py dosyanın en sonuna ekle:
-async def swarm_debug():
-    print("🚀 Sürü (Swarm) Motoru tetikleniyor...")
-    listener = RedisSwarmListener()
-    # Gerçek Redis'e gitmeden, analiz motorunu direkt test et
-    sonuc = await listener.process_text("Denizli'de tekstil üreten, yapay zeka kullanan öncü bir şirketiz.")
-    print(f"✅ Analiz tamamlandı. Elit şirket sayısı: {len([s for s in sonuc if s.get('confidence_score', 0) >= 85])}")
-
-if __name__ == "__main__":
-    asyncio.run(swarm_debug())
+    asyncio.run(worker_loop())
