@@ -5,6 +5,7 @@ import logging
 from typing import Optional, List, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.database import get_db
 from app.models.company import Company
@@ -22,7 +23,7 @@ def execute_real_scraper_bot(query: str) -> None:
     """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.abspath(os.path.join(current_dir, "../../../"))
+        project_root = os.path.abspath(os.path.join(current_dir, "../../../../"))
         scraper_dir = os.path.join(project_root, "scraper-bot")
 
         python_executable = sys.executable
@@ -91,4 +92,34 @@ def list_companies(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Veri listeleme islemi sirasinda bir ic sunucu hatası olustu."
+        )
+
+
+@router.get("/stats/industry-distribution", status_code=status.HTTP_200_OK)
+def get_industry_distribution(db: Session = Depends(get_db)) -> Dict[str, int]:
+    """
+    TEMİZ KOD: Delphi grafik arayüzünün (btnAnalizGetirClick) talep ettigi,
+    sirketlerin sektorlerine gore dagılım sayılarını donen uc nokta.
+    """
+    try:
+        # Sektör gruplarına göre şirket sayılarını sayan SQL sorgusu
+        query_results = (
+            db.query(Company.industry, func.count(Company.id))
+            .group_by(Company.industry)
+            .all()
+        )
+
+        # Sonuçların Delphi TJSONObject yapısına uygun düz bir sözlüğe dönüştürülmesi
+        distribution_map: Dict[str, int] = {}
+        for industry, count in query_results:
+            if industry:
+                distribution_map[str(industry)] = int(count)
+
+        return distribution_map
+
+    except Exception as exc:
+        logger.error(f"Sektorel dagılım istatistikleri hesaplanırken hata olustu: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Istatistik verileri uretilirken bir ic sunucu hatası olustu."
         )

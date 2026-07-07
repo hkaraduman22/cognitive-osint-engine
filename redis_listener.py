@@ -11,23 +11,30 @@ except ImportError:
 
 from analiz import AnalizMotoru
 
-logging.basicConfig(level=logging.INFO, format='%(message)s')
-logger = logging.getLogger("Worker")
+# Günlükleme (Logging) sisteminin canlı ortam standartlarına uygun formatta yapılandırılması
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("OSINT_Listener")
 
 
-async def worker_loop():
+async def worker_loop() -> None:
+    """
+    Üretim ortamında Redis kuyruğunu (osint_raw_queue) asenkron olarak dinleyen
+    ve gelen verileri tekil AnalizMotoru üzerinden işleyen ana döngü.
+    """
     if aioredis is None:
-        print("Hata: redis paketi yüklü değil (pip install redis)")
+        logger.error("Kritik Hata: 'redis' asenkron paketi yüklü değil (pip install redis).")
         return
 
+    # Asenkron Redis bağlantısının güvenli şekilde başlatılması
     r = await aioredis.from_url("redis://localhost:6379/0", decode_responses=True)
     ai_engine = AnalizMotoru()
 
-    print("Worker başlatıldı. Redis kuyruğu dinleniyor...")
+    logger.info("OSINT Üretim Dinleyicisi (Listener) başlatıldı. Redis kuyruğu dinleniyor...")
 
-    counter = 1
+    counter: int = 1
     while True:
-        data_json = await r.lpop("osint_raw_queue")
+        # Kuyruktan bloklamayan asenkron FIFO veri çekme işlemi
+        data_json: str | None = await r.lpop("osint_raw_queue")
 
         if data_json:
             try:
@@ -42,20 +49,27 @@ async def worker_loop():
                 hedef_url = "Bilinmeyen"
 
             try:
+                # Güvenli hale getirilmiş AI analiz sürecinin çağrılması
                 ai_sonuc = await ai_engine.analiz_et(ham_metin)
             except Exception as e:
-                ai_sonuc = [{"hata": "WORKER_ANALIZ_HATASI", "detay": str(e)}]
+                ai_sonuc = [{"hata": "PRODUCTION_ANALIZ_HATASI", "detay": str(e)}]
 
-            print(f"\n{counter}. [{kaynak.upper()}] -> {hedef_url}")
-            print(f"   Yyapay Zeka Analizi: {len(ai_sonuc)} şirket bulundu.")
-            print(f"   Metin (Karakter Sayısı): {len(ham_metin)}")
-            print("-" * 50)
+            # Üretim ortamı loglama standartları (print yerine logger kullanımı)
+            logger.info(f"[{counter}] Kuyruktan Görev Alındı -> [{kaynak.upper()}] {hedef_url}")
+            logger.info(f"   Yapay Zeka Analizi: {len(ai_sonuc)} şirket potansiyeli tespit edildi.")
+            logger.info(f"   Metin Boyutu: {len(ham_metin)} karakter.")
+            logger.info("-" * 60)
 
             counter += 1
+            # Rate-limit sınırlarına takılmamak ve sunucuyu korumak için bekleme süresi
             await asyncio.sleep(5)
         else:
+            # Kuyruk boşsa işlemciyi (CPU) dinlendirmek için uyku modu
             await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
-    asyncio.run(worker_loop())
+    try:
+        asyncio.run(worker_loop())
+    except KeyboardInterrupt:
+        logger.info("OSINT Dinleyici servisi kullanıcı tarafından güvenli şekilde kapatıldı.")

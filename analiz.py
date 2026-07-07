@@ -42,29 +42,32 @@ logger = logging.getLogger("AnalizMotoru")
 
 
 class AnalizMotoru:
-    def __init__(self):
-        groq_api_key = os.getenv("GROQ_API_KEY")
+    def __init__(self) -> None:
+        groq_api_key: str | None = os.getenv("GROQ_API_KEY")
         if AsyncGroq and groq_api_key:
             self.client = AsyncGroq(api_key=groq_api_key)
         else:
             self.client = None
 
-        self.model = "llama-3.3-70b-versatile"
-        self.api_url = os.getenv("COMPANY_API_URL", "http://127.0.0.1:8000/api/v1/companies")
-        self.api_key = os.getenv("COMPANY_API_KEY")
+        self.model: str = "llama-3.3-70b-versatile"
+        self.api_url: str = os.getenv("COMPANY_API_URL", "http://127.0.0.1:8000/api/v1/companies")
+        self.api_key: str | None = os.getenv("COMPANY_API_KEY")
 
-        self.prompt_template = (
+        # TEMİZ KOD: Süslü parantez çakışmalarını engellemek için {ham_metin} yerine [HAM_METIN] kullanılmıştır.
+        self.prompt_template: str = (
             "Web sitesinin ham metnini analiz et. Bu metinden şirketleri ve varsa bu şirketlerin yetkililerini, kurucularını veya emlak danışmanlarını bul. "
             "Her şirket için şu alanları içeren bir JSON array döndür:\n"
             "name, website, location, description, source, confidence_score (0-100 arası) "
-            "ve şirket yetkilileri için bir 'officials' listesi (içinde full_name ve title olan objeler).\n\n"
+            "ve şirket yetkilileri için bir 'officials' listesi (içinde full_name và title olan objeler).\n\n"
             "UYARI: Eğer metinde yetkili adı geçmiyorsa, 'officials' listesini boş bırakma! "
-            "FastAPI doğrulaması için listeye otomatik olarak şu objeyi ekle: {开口}\"full_name\": \"Belirtilmemiş\", \"title\": \"Bilinmeyen Unvan\"{闭口}.\n\n"
-            "Yalnızca JSON array döndür, açıklama yazma. Metin:\n{ham_metin}"
+            "FastAPI doğrulaması için listeye otomatik olarak şu objeyi ekle: {\"full_name\": \"Belirtilmemiş\", \"title\": \"Bilinmeyen Unvan\"}.\n\n"
+            "Yalnızca JSON array döndür, açıklama yazma. Metin:\n[HAM_METIN]"
         )
-        self.prompt_template = self.prompt_template.replace("开口", "{").replace("闭口", "}")
 
     def _build_fallback_result(self, reason: str) -> dict[str, Any]:
+        """
+        Herhangi bir hata durumunda sistemin durmaması için koruyucu fallback verisi üretir.
+        """
         return {
             "name": "Belirsiz", "website": None, "location": "Denizli",
             "description": "Fallback", "source": "web", "confidence_score": 50,
@@ -73,29 +76,38 @@ class AnalizMotoru:
         }
 
     async def analiz_et(self, ham_metin: str) -> list[dict[str, Any]]:
+        """
+        Gelen ham metni temizler, Groq API üzerinden LLM analizine gönderir ve doğrulanmış sonuçları döner.
+        """
         if not ham_metin or not ham_metin.strip():
             return [self._build_fallback_result("Boş metin")]
 
         if self.client is None:
             return [self._build_fallback_result("Groq client hazır değil")]
 
-        cleaned_text = re.sub(r"<[^>]+>", " ", ham_metin)
+        # HTML etiketlerinin temizlenmesi ve gereksiz boşlukların sıkıştırılması
+        cleaned_text: str = re.sub(r"<[^>]+>", " ", ham_metin)
         cleaned_text = re.sub(r"\s{2,}", " ", cleaned_text).strip()[:15000]
 
         try:
+            # KRİTİK HATA DÜZELTMESİ: .format() yerine güvenli .replace() kullanılarak
+            # metindeki JS/CSS süslü parantezlerinin format motorunu çökertmesi kalıcı olarak engellenmiştir.
+            full_prompt: str = self.prompt_template.replace("[HAM_METIN]", cleaned_text)
+
             response = await self.client.chat.completions.create(
                 messages=[
                     {"role": "system",
                      "content": "Sen bir OSINT veri analiz uzmanısın. Çıktı olarak sadece geçerli bir JSON array ver."},
-                    {"role": "user", "content": self.prompt_template.format(ham_metin=cleaned_text)}
+                    {"role": "user", "content": full_prompt}
                 ],
                 model=self.model,
                 response_format={"type": "json_object"}
             )
 
-            content = response.choices[0].message.content.strip()
-            data = json.loads(content)
+            content: str = response.choices[0].message.content.strip()
+            data: Any = json.loads(content)
 
+            # JSON yapısının array formatına normalize edilmesi lojiği
             if isinstance(data, dict):
                 liste_trouvee = None
                 for k, v in data.items():
@@ -109,11 +121,12 @@ class AnalizMotoru:
                 else:
                     data = []
 
-            results = []
+            results: list[dict[str, Any]] = []
             if isinstance(data, list):
                 for item in data:
                     item["analiz_tarihi"] = date.today().isoformat()
 
+                    # Eksik yetkili bilgilerinin şema doğrulaması için tamamlanması
                     if "officials" in item and isinstance(item["officials"], list):
                         for off in item["officials"]:
                             if not off.get("full_name"):
@@ -124,13 +137,15 @@ class AnalizMotoru:
                         item["officials"] = [{"full_name": "Belirtilmemiş", "title": "Bilinmeyen Unvan"}]
 
                     try:
+                        # Pydantic şema doğrulaması (Validation)
                         valid_data = AnalizSonucu(**item)
                         results.append(valid_data.model_dump())
                     except Exception as val_err:
                         logger.warning(f"Format hatası nedeniyle öğe atlandı: {val_err}")
                         continue
 
-            elites = [item for item in results if item.get("confidence_score", 0) >= 85]
+            # Sadece 85 puan ve üzeri olan yüksek nitelikli elit şirketlerin filtrelenmesi
+            elites: list[dict[str, Any]] = [item for item in results if item.get("confidence_score", 0) >= 85]
 
             if elites and self.api_url:
                 await self._post_companies_to_api_async(elites)
@@ -142,7 +157,10 @@ class AnalizMotoru:
             return [self._build_fallback_result(str(e))]
 
     async def _post_companies_to_api_async(self, companies: list[dict[str, Any]]) -> None:
-        headers = {"Content-Type": "application/json"}
+        """
+        Nitelikli elit verileri Core API'ye asenkron olarak güvenli şekilde POST eder.
+        """
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
@@ -151,7 +169,7 @@ class AnalizMotoru:
 
         async with httpx.AsyncClient() as client:
             for c in companies:
-                payload = {
+                payload: dict[str, Any] = {
                     "name": c.get("name", "Bilinmeyen Firma"),
                     "industry": c.get("description", "Avukat/Hukuk"),
                     "city": c.get("location", "Denizli"),
@@ -161,7 +179,7 @@ class AnalizMotoru:
                 try:
                     resp = await client.post(self.api_url, json=payload, headers=headers, timeout=15)
                     if resp.status_code in (200, 201):
-                        logger.info(f"   BAŞARI: {payload['name']} ve yetkilileri kaydedildi.")
+                        logger.info(f"   BAŞARI: {payload['name']} ve yetkilileri sisteme kaydedildi.")
                     else:
                         logger.error(f"   API Reddi: {resp.status_code} - {resp.text}")
                 except Exception as e:
