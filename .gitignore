@@ -1,19 +1,64 @@
+# Environment and secrets
 .env
+.env.*
 
+<<<<<<< Updated upstream
 .idea
 
 # Python önbellek dosyaları
+=======
+# Python cache and build artifacts
+>>>>>>> Stashed changes
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.python-version
 
-# İşletim sistemi dosyaları
+# Logs and runtime files
+*.log
+*.sqlite3
+*.db
+*.db-journal
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# macOS / Windows system files
 .DS_Store
 Thumbs.db
 
-# Sanal ortam dosyaları 
-venv/
-.venv/
+# Docker
+docker-compose.override.yml
+docker-compose.*.yml
 
-*.db
-test_analiz.py
-temp.py
+# Node and frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Misc
+*.tmp
+*.temp
+*.bak
+*.orig
