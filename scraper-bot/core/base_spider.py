@@ -7,13 +7,12 @@ class BaseSpider:
         self._storage = storage
 
     def run(self, query: str) -> None:
-        print(f"[*] '{self._fetcher.source_id}' aranıyor...")
+        print(f"[*] '{self._fetcher.source_id}' araniyor...")
         urls = self._fetcher.fetch(query)
 
         for url in urls:
             parsed_data = self._parser.parse(url)
             if parsed_data:
-                # Sadece Redis'e (Storage) gönderiyoruz
                 self._storage.save({
                     "kaynak": self._fetcher.source_id,
                     "hedef_url": url,
