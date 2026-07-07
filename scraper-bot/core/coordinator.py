@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
-from core.interfaces import IHtmlParser, IDataStorage, IUrlFetcher, IAiEngine
+from core.interfaces import IHtmlParser, IDataStorage, IUrlFetcher
 from core.base_spider import BaseSpider
 from core.config_loader import ConfigLoader
 from spiders.generic_spider import GenericUrlFetcher
@@ -20,8 +20,8 @@ class DataDrivenCoordinator:
             FreeGlobalUrlFetcher(suffix="", delay=0.0),
             FreeGlobalUrlFetcher(suffix="OSB", delay=0.5),
             FreeGlobalUrlFetcher(suffix="Ticaret Odası", delay=1.0),
-            FreeGlobalUrlFetcher(suffix="iş ilanı", delay=1.5),
-            FreeGlobalUrlFetcher(suffix="sektör forum", delay=2.0)
+            FreeGlobalUrlFetcher(suffix="is ilani", delay=1.5),
+            FreeGlobalUrlFetcher(suffix="sektor forum", delay=2.0)
         ]
 
         cleaned_query = query
@@ -40,14 +40,14 @@ class DataDrivenCoordinator:
                 break
 
         if not city_found:
-            print("[!] Eşleşen yerel kaynak bulunamadı. Genişletilmiş DDG Ordusu kullanılacak.")
+            print("[!] Eslesen yerel kaynak bulunamadi. Genel arama ordusu devreye alinacak.")
 
         return selected_fetchers, cleaned_query
 
     def execute(self, query: str) -> None:
         fetchers, cleaned_query = self._resolve_fetchers(query)
 
-        print(f"[!] Toplam {len(fetchers)} adet tarayıcı bot eşzamanlı olarak başlatılıyor...\n")
+        print(f"[!] Toplam {len(fetchers)} adet tarayici bot eszamanli olarak baslatiliyor...\n")
         with ThreadPoolExecutor(max_workers=len(fetchers)) as executor:
             futures = [
                 executor.submit(BaseSpider(fetcher, self._parser, self._storage).run, cleaned_query)
@@ -56,5 +56,5 @@ class DataDrivenCoordinator:
             for future in futures:
                 try:
                     future.result()
-                except Exception as e:
-                    print(f"[-] İş parçacığı hatası: {e}")
+                except Exception as exc:
+                    print(f"[-] Is parcacigi calisirken hata olustu: {exc}")

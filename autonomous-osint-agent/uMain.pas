@@ -10,7 +10,7 @@ uses
   FireDAC.Comp.Client, REST.Response.Adapter, REST.Client, Data.Bind.Components,
   Data.Bind.ObjectScope, Vcl.Grids, Vcl.DBGrids, Vcl.StdCtrls,
   System.Threading, System.JSON, VCLTee.TeEngine, VCLTee.Series, Vcl.ExtCtrls,
-  VCLTee.TeeProcs, VCLTee.Chart;
+  VCLTee.TeeProcs, VCLTee.Chart, Winapi.ShellAPI; // Winapi.ShellAPI entegre edildi
 
 type
   TfrmMain = class(TForm)
@@ -26,7 +26,6 @@ type
     mmoLoglar: TMemo;
     chtSektor: TChart;
 
-    // API Bilesenleri
     RestClient: TRESTClient;
     RestRequest: TRESTRequest;
     RestResponse: TRESTResponse;
@@ -34,7 +33,6 @@ type
     MemTableSonuclar: TFDMemTable;
     dsSonuclar: TDataSource;
 
-    // Analitik icin ayri istek bileseni
     RestReqStats: TRESTRequest;
     RestResStats: TRESTResponse;
 
@@ -43,6 +41,7 @@ type
     procedure btnAnalizGetirClick(Sender: TObject);
     procedure dbgSonuclarDblClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction); // Kapatma olayi eklendi
   private
     procedure GelismisAramaYap;
     procedure LogYaz(AMesaj: string);
@@ -62,6 +61,9 @@ begin
 end;
 
 procedure TfrmMain.FormCreate(Sender: TObject);
+var
+  ProjectRoot: string;
+  BackendCmd, ListenerCmd: string;
 begin
   if cmbSektor.Items.Count = 0 then
   begin
@@ -81,22 +83,42 @@ begin
   end;
   cmbCalisanSayisi.ItemIndex := 0;
 
-  LogYaz('Sistem baslatildi. Tum moduller (Code Freeze) yayinda.');
+  LogYaz('Sistem baslatildi. Servisler kontrol ediliyor.');
+
+  // Proje kok dizini executable konumuna gore dinamik olarak hesaplaniyor
+  ProjectRoot := ExpandFileName(ExtractFilePath(Application.ExeName) + '..\..\..\..\');
+
+  // Servislerin baslatilma komutlari hazirlaniyor
+  BackendCmd := '/c cd /d "' + ProjectRoot + 'autonomous-osint-agent\core-api" && ..\..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000';
+  ListenerCmd := '/c cd /d "' + ProjectRoot + '" && .venv\Scripts\python.exe redis_listener.py';
+
+  // Windows API kullanilarak uvicorn ve redis_listener arka planda baslatiliyor
+  ShellExecute(0, 'open', 'cmd.exe', PChar(BackendCmd), nil, SW_SHOWMINIMIZED);
+  ShellExecute(0, 'open', 'cmd.exe', PChar(ListenerCmd), nil, SW_SHOWMINIMIZED);
+
+  LogYaz('Arka plan servisleri otomatik olarak tetiklendi.');
 end;
 
-// 5. GUN: VİTRİN VE FİLTRELEME
+procedure TfrmMain.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  LogYaz('Sistem kapatiliyor, arka plan servisleri sonlandiriliyor.');
+  // Uygulama kapatilirken arkada bagimli kalan Python surecleri temizleniyor
+  ShellExecute(0, 'open', 'taskkill.exe', '/F /IM python.exe', nil, SW_HIDE);
+end;
+
 procedure TfrmMain.GelismisAramaYap;
 begin
-  LogYaz('Filtrelere gore veritabaninda arama yapiliyor...');
+  LogYaz('Veritabanı sorgulaması baslatildi...');
   RestRequest.Params.Clear;
   RestRequest.Method := rmGET;
   RestRequest.Resource := 'companies';
 
-  if Trim(edtSehir.Text) <> '' then RestRequest.AddParameter('sehir', Trim(edtSehir.Text), pkGETrsUnsaved);
-  if (cmbSektor.ItemIndex > 0) then RestRequest.AddParameter('sektor', cmbSektor.Text, pkGETrsUnsaved);
-  if (cmbCalisanSayisi.ItemIndex > 0) then RestRequest.AddParameter('calisan_araligi', cmbCalisanSayisi.Text, pkGETrsUnsaved);
-  if Trim(edtMinPuan.Text) <> '' then RestRequest.AddParameter('min_puan', Trim(edtMinPuan.Text), pkGETrsUnsaved);
-  if chkSadeceYatirimAlanlar.Checked then RestRequest.AddParameter('yatirim_aldi_mi', 'true', pkGETrsUnsaved);
+  if Trim(edtSehir.Text) <> '' then
+    RestRequest.AddParameter('sehir', Trim(edtSehir.Text), pkGETrsUnsaved);
+  if (cmbSektor.ItemIndex > 0) then
+    RestRequest.AddParameter('sektor', cmbSektor.Text, pkGETrsUnsaved);
+  if Trim(edtMinPuan.Text) <> '' then
+    RestRequest.AddParameter('min_puan', Trim(edtMinPuan.Text), pkGETrsUnsaved);
 
   try
     RestRequest.Execute;
@@ -104,10 +126,10 @@ begin
     begin
       MemTableSonuclar.Close;
       MemTableSonuclar.Open;
-      LogYaz('Basarili: ' + IntToStr(MemTableSonuclar.RecordCount) + ' kayit bulundu.');
+      LogYaz('Sorgu basarili: ' + IntToStr(MemTableSonuclar.RecordCount) + ' kayit listelendi.');
     end
     else
-      LogYaz('Hata: API Kodu ' + RestResponse.StatusCode.ToString);
+      LogYaz('Hata kuralı: HTTP API Kodu ' + RestResponse.StatusCode.ToString);
   except
     on E: Exception do LogYaz('Baglanti Hatasi: ' + E.Message);
   end;
@@ -118,25 +140,32 @@ begin
   GelismisAramaYap;
 end;
 
-// 4. GUN: OSINT BOTUNU ASENKRON TETIKLEME
 procedure TfrmMain.btnTaramaBaslatClick(Sender: TObject);
+var
+  SorguKelimeleri: string;
 begin
-  LogYaz('OSINT Taramasi baslatiliyor. Bot ve LLM isleme alindi...');
+  SorguKelimeleri := Trim(cmbSektor.Text);
+  if (SorguKelimeleri = '') or (cmbSektor.ItemIndex = 0) then
+    SorguKelimeleri := 'Denizli Tekstil';
+
+  LogYaz('OSINT veri toplama sureci tetikleniyor...');
   btnTaramaBaslat.Enabled := False;
 
   TTask.Run(procedure
   begin
+    RestReqStats.Params.Clear;
     RestReqStats.Method := rmPOST;
     RestReqStats.Resource := 'companies/scan';
+    RestReqStats.AddParameter('query', SorguKelimeleri, pkQUERY);
 
     try
       RestReqStats.Execute;
       TThread.Queue(nil, procedure
       begin
-        if RestResStats.StatusCode = 200 then
-          LogYaz('MUKEMMEL: Bot verileri cekti, LLM eledi ve DB''ye kaydedildi!')
+        if RestResStats.StatusCode = 202 then
+          LogYaz('Islem kabul edildi: Arama botlari arkaplanda calisiyor.')
         else
-          LogYaz('Hata: Tarama sirasinda sorun olustu. Kod: ' + RestResStats.StatusCode.ToString);
+          LogYaz('Hata: Tarama tetikleme islemi basarisiz oldu. Kod: ' + RestResStats.StatusCode.ToString);
 
         btnTaramaBaslat.Enabled := True;
       end);
@@ -145,7 +174,7 @@ begin
       begin
         TThread.Queue(nil, procedure
         begin
-          LogYaz('Baglanti Hatasi (Bot Cagrilarinda): ' + E.Message);
+          LogYaz('Sunucu baglanti hatasi: ' + E.Message);
           btnTaramaBaslat.Enabled := True;
         end);
       end;
@@ -153,7 +182,6 @@ begin
   end);
 end;
 
-// 6. GUN: ANALITIK VE GRAFIKLER (TChart)
 procedure TfrmMain.btnAnalizGetirClick(Sender: TObject);
 var
   JSONObj: TJSONObject;
@@ -161,7 +189,8 @@ var
   PieSeries: TPieSeries;
   i: Integer;
 begin
-  LogYaz('Analitik endpoint''inden sektorel dagilim verisi cekiliyor...');
+  LogYaz('Sektorel analiz verileri sunucudan cekiliyor...');
+  RestReqStats.Params.Clear;
   RestReqStats.Method := rmGET;
   RestReqStats.Resource := 'stats/industry-distribution';
 
@@ -169,12 +198,10 @@ begin
     RestReqStats.Execute;
     if RestResStats.StatusCode = 200 then
     begin
-      // Eski grafigi temizle
       chtSektor.RemoveAllSeries;
       PieSeries := TPieSeries.Create(chtSektor);
       chtSektor.AddSeries(PieSeries);
 
-      // JSON Pars Etme
       JSONObj := TJSONObject.ParseJSONValue(RestResStats.Content) as TJSONObject;
       if Assigned(JSONObj) then
       begin
@@ -184,33 +211,31 @@ begin
             JSONPair := JSONObj.Pairs[i];
             PieSeries.AddPie(StrToIntDef(JSONPair.JsonValue.Value, 0), JSONPair.JsonString.Value, clTeeColor);
           end;
-          LogYaz('Grafik basariyla cizildi.');
+          LogYaz('Grafik raporu guncellendi.');
         finally
           JSONObj.Free;
         end;
       end;
     end
     else
-      LogYaz('Analitik verisi alinamadi.');
+      LogYaz('Analiz verisi sunucudan alinmadi.');
   except
-    on E: Exception do LogYaz('Analitik Hatasi: ' + E.Message);
+    on E: Exception do LogYaz('Analiz Hatasi: ' + E.Message);
   end;
 end;
 
-// 5. GUN: DETAY EKRANI
 procedure TfrmMain.dbgSonuclarDblClick(Sender: TObject);
 var
   Detay: string;
 begin
   if MemTableSonuclar.IsEmpty then Exit;
 
-  // JSON'dan gelen field isimlerine gore (Swagger'a uygun varsayilmistir)
-  Detay := 'Firma: ' + MemTableSonuclar.FieldByName('firma_adi').AsString + #13#10 +
-           'Sektor: ' + MemTableSonuclar.FieldByName('sektor').AsString + #13#10 +
-           'Guven Puani: ' + MemTableSonuclar.FieldByName('guven_puani').AsString;
+  Detay := 'Sirket Adi: ' + MemTableSonuclar.FieldByName('name').AsString + #13#10 +
+           'Sektor: ' + MemTableSonuclar.FieldByName('industry').AsString + #13#10 +
+           'Guven Skoru: ' + MemTableSonuclar.FieldByName('confidence_score').AsString;
 
   ShowMessage(Detay);
-  LogYaz(MemTableSonuclar.FieldByName('firma_adi').AsString + ' detaylari incelendi.');
+  LogYaz(MemTableSonuclar.FieldByName('name').AsString + ' sirket detaylari incelendi.');
 end;
 
 end.
