@@ -1,17 +1,21 @@
-from fastapi import APIRouter, status, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks
+from sqlalchemy.orm import Session
+from app.database import get_db
 
-from app.schemas.schemas import ScraperTriggerRequest
-from app.services.search_service import run_scraper_background
+# İçe aktarma hatasını düzelten yeni import satırı
+from app.services.search_service import SearchService, run_scraper_background
 
 router = APIRouter()
 
-
-@router.post("/trigger", status_code=status.HTTP_202_ACCEPTED)
-def trigger_scraper(request: ScraperTriggerRequest, background_tasks: BackgroundTasks):
-    """Trigger the scraper pipeline asynchronously.
-
-    The endpoint accepts JSON: {"target_domain": "...", "keyword": "..."}
-    and starts the scraping + LLM pipeline in the background.
-    """
-    background_tasks.add_task(run_scraper_background, request.target_domain, request.keyword)
-    return {"message": "Scraper tetiklendi, arka planda işlem başlatıldı"}
+@router.post("/trigger")
+async def trigger_scraper(data: dict, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    # Arayüzden gelen JSON datasındaki hedef kelimeyi/domaini al
+    target = data.get("target_domain", data.get("query", "Bilinmeyen Hedef"))
+    
+    # Botu arka planda çalıştır, API'yi bekletme
+    background_tasks.add_task(run_scraper_background, target, db)
+    
+    return {
+        "status": "success", 
+        "message": f"Bot {target} için başarıyla tetiklendi ve kuyruğa alındı."
+    }

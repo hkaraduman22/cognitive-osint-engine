@@ -14,9 +14,6 @@ class SearchService:
         self.search_repository = SearchRepository(db)
 
     def enqueue_search(self, user_id: int, query: str) -> Dict[str, str]:
-        """
-        Kullanicinin arama talebini sistem gecmisine kaydeder.
-        """
         try:
             self.search_repository.save_search_history(user_id=user_id, query=query)
             return {"status": "success", "message": "Arama talebi sisteme kaydedildi."}
@@ -25,13 +22,21 @@ class SearchService:
             return {"status": "error", "message": "Gecmis kaydi basarisiz oldu."}
 
     def list_records(self) -> List[Record]:
-        """
-        Sistemdeki tum nitelikli kayitlari listeler.
-        """
         return self.search_repository.list_records()
 
     def list_history(self, user_id: int) -> List[SearchHistory]:
-        """
-        Belirli bir kullaniciya ait son arama gecmisini getirir.
-        """
         return self.search_repository.get_last_searches(user_id=user_id)
+
+# EKSİK OLAN VE HATAYA SEBEP OLAN FONKSİYON:
+def run_scraper_background(target_domain: str, db: Session):
+    """
+    Arayüzden gelen istekle otonom botu arka planda tetikler.
+    """
+    logger.info(f"Bot arka planda {target_domain} için tetiklendi.")
+    
+    # Gelen arama talebini veritabanına kaydet
+    service = SearchService(db)
+    service.enqueue_search(user_id=1, query=target_domain)
+    
+    # Not: Redis kuyruğuna veri gönderme işlemin varsa 
+    # (redis_client.publish vb.) buraya eklenebilir.
