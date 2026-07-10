@@ -1,6 +1,6 @@
 """Redis listener / LLM Worker (Dev 3)
 
-This listener consumes raw HTML/text items from Redis (queue: osint:raw_text),
+This listener consumes raw HTML/text items from Redis (queue: osint_raw_queue),
 cleans the text, calls Gemini via google-generativeai, and posts high-confidence
 company records to the Core API.
 """
@@ -39,7 +39,7 @@ logger = logging.getLogger("redis_listener")
 
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint:raw_text")
+QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint_raw_queue")
 COMPANY_API_URL = os.getenv("COMPANY_API_URL", "http://127.0.0.1:8000/api/v1/companies")
 COMPANY_API_KEY = os.getenv("COMPANY_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -112,8 +112,19 @@ def configure_gemini() -> Optional[object]:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
 
+        preferred = [
+            "models/gemini-flash-lite-latest",
+            "models/gemini-3.1-flash-lite",
+            "models/gemini-3.5-flash",
+            "models/gemini-2.0-flash-lite",
+            "models/gemini-2.0-flash",
+            "models/gemini-2.5-flash",
+        ]
+
         # Attempt to list available models and pick the first that supports generateContent
         chosen_name = None
+        fallback_name = None
+        available_generate_models = set()
         try:
             models = None
             if hasattr(genai, "list_models"):
@@ -143,16 +154,26 @@ def configure_gemini() -> Optional[object]:
                     # some providers embed methods as list of strings
                     if methods and isinstance(methods, (list, tuple)):
                         if any("generateContent" in str(x) for x in methods):
-                            chosen_name = name
-                            break
+                            available_generate_models.add(name)
+                            if fallback_name is None:
+                                fallback_name = name
+
+            if available_generate_models:
+                for candidate in preferred:
+                    if candidate in available_generate_models:
+                        chosen_name = candidate
+                        break
 
         except Exception:
             logger.debug("Model listeleme sırasında hata; fallback kullanılacak", exc_info=True)
 
+        if not chosen_name and fallback_name:
+            chosen_name = fallback_name
+
         # Preferred fallbacks if list_models didn't yield a candidate
-        preferred = ["gemini-1.5-flash", "gemini-pro", "gemini-1.5", "gemini-1.0"]
+        fallback_candidates = preferred + ["gemini-2.5-flash", "gemini-pro"]
         if not chosen_name:
-            for candidate in preferred:
+            for candidate in fallback_candidates:
                 try:
                     # quick check by attempting to construct model object
                     _ = genai.GenerativeModel(candidate)
@@ -178,64 +199,166 @@ def post_company_to_api(payload: dict) -> Tuple[bool, int]:
     if COMPANY_API_KEY:
         headers["Authorization"] = f"Bearer {COMPANY_API_KEY}"
     try:
+        logger.info("[Listener] POST URL=%s", COMPANY_API_URL)
+        logger.info("[Listener] POST payload=%s", payload)
+        logger.info("[Listener] POST request sending")
         resp = requests.post(COMPANY_API_URL, json=payload, headers=headers, timeout=15)
+        logger.info("[Listener] POST status=%s", resp.status_code)
+        logger.info("[Listener] Response body=%s", resp.text)
         return (resp.ok, resp.status_code)
     except requests.RequestException:
         logger.exception("Core API'ye POST isteği başarısız oldu")
+        logger.info("[Listener] Retry=False")
+        logger.info("[Listener] Discard=True")
         return (False, 0)
+
+
+def extract_input_text(raw_message: str) -> Tuple[str, str | None, str | None, int | None]:
+    """Normalize incoming queue payload to the text sent to the LLM.
+
+    Expected canonical payload is a JSON object with ham_metin.
+    Fallback to raw message keeps backward compatibility for plain-text producers.
+    """
+    try:
+        parsed_payload = json.loads(raw_message)
+        logger.info("[Listener] JSON parse başarılı")
+    except json.JSONDecodeError:
+        logger.warning("[Listener] JSON parse başarısız; plain text fallback uygulanıyor")
+        return clean_text(raw_message), None, None, None
+
+    if not isinstance(parsed_payload, dict):
+        logger.warning("JSON payload object değil; ham mesaj fallback ile işlenecek")
+        return clean_text(raw_message), None, None, None
+
+    source = parsed_payload.get("kaynak")
+    target_url = parsed_payload.get("hedef_url")
+    raw_text = parsed_payload.get("ham_metin")
+    raw_search_history_id = parsed_payload.get("search_history_id")
+
+    search_history_id = None
+    if raw_search_history_id is not None:
+        try:
+            candidate = int(raw_search_history_id)
+            if candidate > 0:
+                search_history_id = candidate
+                logger.info("[Listener] search_history_id=%s", search_history_id)
+        except (TypeError, ValueError):
+            logger.warning("search_history_id geçersiz; ilişki kaydı atlanacak")
+            logger.warning("[Listener] search_history_id parse hatası")
+
+    if search_history_id is None:
+        logger.info("[Listener] search_history_id=None")
+
+    if raw_text is None or not str(raw_text).strip():
+        logger.warning(
+            "JSON payload içinde ham_metin yok veya boş; mesaj atlandı (veri kaybı riski loglandı). kaynak=%s hedef_url=%s payload_keys=%s",
+            source,
+            target_url,
+            sorted(parsed_payload.keys()),
+        )
+        return "", source, target_url, search_history_id
+
+    return clean_text(str(raw_text)), source, target_url, search_history_id
 
 
 def process_message(model, redis_client, queue_name: str, raw_message: str) -> None:
     """Main processing: clean, call Gemini, evaluate score and post if high-quality."""
-    cleaned = clean_text(raw_message)
+    logger.info("[Listener] Queue received")
+    logger.info("[Listener] Payload=%s", raw_message)
+    cleaned, source, target_url, search_history_id = extract_input_text(raw_message)
     if not cleaned:
         logger.warning("Boş ya da temizlenemeyen metin atlandı")
+        logger.info("[Listener] Discard=True")
+        logger.info("[Listener] Finished")
         return
 
+    if source or target_url:
+        logger.debug("İşlenen payload metadata: kaynak=%s hedef_url=%s", source, target_url)
+
     system_instruction = (
-        "Sana internetten kazınmış ham bir metin vereceğim. Bu metni analiz et. "
-        "Eğer içeride bir firmanın adı, şehri ve faaliyet gösterdiği sektör net olarak geçiyorsa bunları ayıkla. "
-        "Bulduğun verilerin doğruluğuna ve netliğine 0 ile 100 arasında bir confidence_score ver. "
-        'Çıktıyı kesinlikle ve sadece şu JSON formatında dön: {"name": "...", "city": "...", "industry": "...", "confidence_score": 90}'
+        "SEN BIR OSINT SIRKET ESLESTIRME MOTORUSUN. "
+        "Gorevin, scraper'dan gelen sirket adaylarini kullanici sorgusuna gore filtrelemektir. "
+        "Yanlis pozitif uretmek en buyuk hatadir. Emin degilsen sirketi dondurme. "
+        "\n\n"
+        "KURALLAR: "
+        "1) Kullanici sorgusundaki sehir, sektor, faaliyet alani ve anahtar kelimelerle yuksek derecede uyum ara. "
+        "Aday sirket bu sinyallerin tamamina guclu sekilde uymuyorsa reddet. "
+        "2) Sirket adinda anahtar kelimenin gecmesi tek basina yeterli degildir. "
+        "Karari faaliyet alanina gore ver. "
+        "Ornek: Cengaver Lojistik Petrol Otomotiv Insaat Tekstil adinda gecse bile faaliyet lojistikse REDDET. "
+        "3) Sehir belirtilmisse yalnizca o sehirde faaliyet gosteren sirketleri kabul et, diger sehirleri reddet. "
+        "4) Su kurumlari ASLA sirket kabul etme: Ticaret Odasi, Belediye, Universite, Bakanlik, Vakif, Dernek, kamu kurumu, meslek odasi, federasyon. "
+        "5) Anahtar kelime benzerligi tek basina yeterli degildir. "
+        "Ornek Ankara Hali sorgusunda hali ureticisi/magazasi/fabrikasi/toptancisi/zemin kaplama kabul; hali saha/spor tesisi/futbol kulubu reddet. "
+        "Ornek Denizli tekstil sorgusunda tekstil/konfeksiyon/kumas uretimi/hazir giyim/dokuma/iplik uretimi kabul; lojistik/sigorta/yazilim/web tasarim/reklam/medya/restoran/market/otel reddet. "
+        "6) Sirket sektoru veya faaliyet alani net degilse REDDET. Tahmin yapma. "
+        "7) Confidence kurallari: 100 = sehir + sektor + faaliyet alani tamamen uyuyor; 95 = cok guclu eslesme; 90 = uyuyor ama kucuk belirsizlik var; 85 = zayif ama hala kabul edilebilir iliski. 80 ve altini uretme. "
+        "8) Sorguyla ilgisi olmayan hicbir sirketi dondurme. 5 dogru sonuc, 20 yanlis sonuctan daha degerlidir. "
+        "\n\n"
+        "JSON disinda hicbir sey yazma. "
+        "Her sirket icin yalnizca su alanlari dondur: name, industry, city, confidence. "
+        "Uygun aday yoksa yalnizca bos JSON dondur: {}"
     )
 
     # Build prompt
     prompt = f"System: {system_instruction}\n\nInput:\n{cleaned}"
 
     if model is None:
-        logger.error("Gemini modeli yapılandırılmamış; mesaj atlanıyor")
+        logger.error("Gemini modeli yapılandırılmamış; mesaj kuyruğa geri konuyor")
+        try:
+            logger.info("[Listener] Retry=True")
+            logger.info("[Listener] Retry reason=model_not_configured")
+            redis_client.lpush(queue_name, raw_message)
+        except Exception:
+            logger.exception("Mesaj kuyruğa tekrar eklenirken hata oluştu")
+        time.sleep(2)
+        logger.info("[Listener] Finished")
         return
 
     try:
         # Use model.generate_content similar to other modules if available
+        logger.info("[Listener] Gemini request")
         response = model.generate_content(prompt)
         model_text = getattr(response, "text", str(response))
+        logger.info("[Listener] Gemini response alındı")
+        logger.info("[Listener] Gemini response=%s", model_text)
         logger.debug("Gemini yanıtı: %s", model_text[:400])
 
     except Exception as exc:
         # Handle rate-limit (429) and other transient issues
         msg = str(exc)
+        logger.error("[Listener] Gemini exception type=%s message=%s", type(exc).__name__, msg)
         if "429" in msg or "Too Many Requests" in msg:
             logger.warning("Gemini 429 alındı; mesaj kuyruğa geri konuyor ve 10s uyku uygulanıyor")
             try:
+                logger.info("[Listener] Retry=True")
+                logger.info("[Listener] Retry reason=gemini_429")
                 redis_client.lpush(queue_name, raw_message)
             except Exception:
                 logger.exception("Mesaj kuyruğa tekrar eklenirken hata oluştu")
             time.sleep(10)
+            logger.info("[Listener] Finished")
             return
         logger.exception("Gemini çağrısı sırasında hata oluştu")
         # requeue to avoid data loss
         try:
+            logger.info("[Listener] Retry=True")
+            logger.info("[Listener] Retry reason=gemini_exception")
             redis_client.lpush(queue_name, raw_message)
         except Exception:
             logger.exception("Mesaj kuyruğa tekrar eklenirken hata oluştu")
         time.sleep(2)
+        logger.info("[Listener] Finished")
         return
 
     parsed = extract_json_from_model(model_text)
     if not parsed:
         logger.info("Modelden geçerli JSON gelmedi; veri elendi ve loglandı")
+        logger.info("[Listener] Discard=True")
+        logger.info("[Listener] Finished")
         return
+
+    logger.info("[Listener] LLM company object=%s", parsed)
 
     # Validate expected keys
     name = parsed.get("name")
@@ -243,33 +366,54 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
     industry = parsed.get("industry")
     confidence = parsed.get("confidence_score")
 
+    logger.info("[Listener] Company name=%s", name)
+
     try:
         confidence = int(confidence)
     except Exception:
         logger.warning("confidence_score numeric değil veya yok; veri elendi")
+        logger.info("[Listener] Confidence=%s", confidence)
+        logger.info("[Listener] Confidence passed=False")
+        logger.info("[Listener] Discard=True")
+        logger.info("[Listener] Finished")
         return
 
+    logger.info("[Listener] Confidence=%s", confidence)
+
     if confidence >= 85:
+        logger.info("[Listener] Confidence passed=True")
         payload = {"name": name, "city": city, "industry": industry, "confidence_score": confidence, "officials": []}
+        if search_history_id is not None:
+            payload["search_history_id"] = search_history_id
         ok, status = post_company_to_api(payload)
         if ok:
             logger.info("Elit veri API'ye gönderildi (status=%s): %s", status, name)
+            logger.info("[Listener] POST başarılı")
         else:
             # If API rate limited, attempt to requeue and delay
             if status == 429:
                 logger.warning("Core API 429 döndü; mesaj kuyruğa geri konuyor ve 10s uyku uygulanıyor")
                 try:
+                    logger.info("[Listener] Retry=True")
+                    logger.info("[Listener] Retry reason=api_429")
                     redis_client.lpush(queue_name, raw_message)
                 except Exception:
                     logger.exception("Mesaj kuyruğa tekrar eklenirken hata oluştu")
                 time.sleep(10)
+                logger.info("[Listener] Finished")
                 return
             logger.error("API'ye gönderilemedi, status=%s; veri loglandı ve atlandı", status)
+            logger.info("[Listener] Retry=False")
+            logger.info("[Listener] Discard=True")
     else:
         logger.info("Düşük puanlı veri elendi (confidence=%s): %s", confidence, name)
+        logger.info("[Listener] Confidence passed=False")
+        logger.info("[Listener] Discard=True")
 
     # Throttle to avoid hitting Gemini rate limits
     time.sleep(2)
+    logger.info("[Listener] İşlem başarıyla tamamlandı")
+    logger.info("[Listener] Finished")
 
 
 def main():
@@ -302,11 +446,23 @@ def main():
                 continue
 
             _, raw_message = item
+            logger.info("[Listener] Queue'dan mesaj alındı")
             if not raw_message or not raw_message.strip():
                 logger.warning("Kuyruktan boş mesaj geldi, atlanıyor")
                 continue
 
-            process_message(model, client, QUEUE_NAME, raw_message)
+            try:
+                process_message(model, client, QUEUE_NAME, raw_message)
+            except Exception:
+                logger.exception("Mesaj işlenirken beklenmeyen hata; mesaj kuyruğa geri konuyor")
+                try:
+                    logger.info("[Listener] Retry=True")
+                    logger.info("[Listener] Retry reason=unexpected_process_error")
+                    client.lpush(QUEUE_NAME, raw_message)
+                except Exception:
+                    logger.exception("Beklenmeyen hata sonrası mesaj kuyruğa geri eklenemedi")
+                time.sleep(2)
+                logger.info("[Listener] Finished")
 
         except KeyboardInterrupt:
             logger.info("Dinleyici kesildi (KeyboardInterrupt)")

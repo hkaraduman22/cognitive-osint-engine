@@ -31,6 +31,7 @@ class SearchHistory(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="searches")
+    company_links = relationship("SearchHistoryCompany", back_populates="search_history", cascade="all, delete-orphan")
 
 
 class Record(Base):

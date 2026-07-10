@@ -10,6 +10,7 @@ class SearchRequestDTO(BaseModel):
 
 class SearchResponseDTO(BaseModel):
     message: str
+    search_history_id: int
 
 
 class SearchHistoryDTO(BaseModel):

@@ -2,11 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY core-api/requirements.txt ./
+COPY autonomous-osint-agent/core-api/requirements.txt ./
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir -r requirements.txt
+    && python -m pip install --no-cache-dir -r requirements.txt \
+    && python -m pip install --no-cache-dir ddgs
 
-COPY core-api/ ./core-api/
+COPY autonomous-osint-agent/core-api/ ./core-api/
+COPY scraper-bot/ ./scraper-bot/
 WORKDIR /app/core-api
 
 EXPOSE 8000

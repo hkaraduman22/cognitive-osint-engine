@@ -44,13 +44,13 @@ class DataDrivenCoordinator:
 
         return selected_fetchers, cleaned_query
 
-    def execute(self, query: str) -> None:
+    def execute(self, query: str, search_history_id: int | None = None) -> None:
         fetchers, cleaned_query = self._resolve_fetchers(query)
 
         print(f"[!] Toplam {len(fetchers)} adet tarayici bot eszamanli olarak baslatiliyor...\n")
         with ThreadPoolExecutor(max_workers=len(fetchers)) as executor:
             futures = [
-                executor.submit(BaseSpider(fetcher, self._parser, self._storage).run, cleaned_query)
+                executor.submit(BaseSpider(fetcher, self._parser, self._storage).run, cleaned_query, search_history_id)
                 for fetcher in fetchers
             ]
             for future in futures:

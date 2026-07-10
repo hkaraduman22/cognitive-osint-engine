@@ -6,6 +6,7 @@ from spiders.html_parser import GeneralHtmlParser
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Multi-Source OSINT Data-Driven Engine")
     parser.add_argument("--sorgu", type=str, required=True, help="Aranacak kelime")
+    parser.add_argument("--search-history-id", type=int, required=False, default=None, help="Opsiyonel SearchHistory kimliği")
     return parser.parse_args()
 
 def main() -> None:
@@ -15,7 +16,7 @@ def main() -> None:
     parser = GeneralHtmlParser()
 
     coordinator = DataDrivenCoordinator(parser=parser, storage=storage)
-    coordinator.execute(args.sorgu)
+    coordinator.execute(args.sorgu, search_history_id=args.search_history_id)
 
     print("\n[!] Tarama bitti. Veriler Redis 'osint_raw_queue' kuyruğuna gönderildi.")
 

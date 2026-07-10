@@ -18,7 +18,7 @@ def search(request: SearchRequestDTO, current_user: dict = Depends(get_current_u
 @router.get("/records", response_model=list[RecordDTO])
 def records(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     service = SearchService(db)
-    return service.list_records()
+    return service.list_records(user_id=current_user["id"])
 
 
 @router.get("/history", response_model=list[SearchHistoryDTO])

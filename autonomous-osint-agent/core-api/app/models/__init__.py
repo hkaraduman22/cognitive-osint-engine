@@ -1,4 +1,4 @@
-from .company import Company, CompanyOfficial
+from .company import Company, CompanyOfficial, SearchHistoryCompany
 from .models import Base, BotLog, Record, SearchHistory, User
 
 __all__ = [
@@ -6,6 +6,7 @@ __all__ = [
     "User",
     "Company",
     "CompanyOfficial",
+    "SearchHistoryCompany",
     "SearchHistory",
     "Record",
     "BotLog",

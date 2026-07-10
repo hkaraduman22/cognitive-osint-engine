@@ -24,10 +24,7 @@ if _project_root:
     if _scraper_bot_path not in sys.path:
         sys.path.insert(0, _scraper_bot_path)
 
-# OSINT motoru bileşenlerinin (core ve spiders) sorunsuz şekilde dahil edilmesi
-from core.storage import RedisDataStorage
-from core.coordinator import DataDrivenCoordinator
-from spiders.html_parser import GeneralHtmlParser
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,22 +38,22 @@ class SearchService:
         # Private isimlendirme kuralına uygun olarak repository nesnesi atanır
         self._search_repository = SearchRepository(db)
 
-    def enqueue_search(self, user_id: int, query: str) -> Dict[str, str]:
+    def enqueue_search(self, user_id: int, query: str) -> Dict[str, Any]:
         """
         Kullanıcının yaptığı arama talebini sistem geçmişine kaydeder.
         """
         try:
-            self._search_repository.save_search_history(user_id=user_id, query=query)
-            return {"status": "success", "message": "Arama talebi sisteme başarıyla kaydedildi."}
+            search = self._search_repository.save_search_history(user_id=user_id, query=query)
+            return {"message": "Arama talebi sisteme başarıyla kaydedildi.", "search_history_id": search.id}
         except Exception as exc:
             logger.error(f"Arama geçmişi veritabanına kaydedilirken hata oluştu: {exc}")
-            return {"status": "error", "message": "Geçmiş kaydı başarısız oldu."}
+            raise
 
-    def list_records(self) -> List[Record]:
+    def list_records(self, user_id: int) -> List[Record]:
         """
         Sistemde kayıtlı olan tüm nitelikli OSINT verilerini listeler.
         """
-        return self._search_repository.list_records()
+        return self._search_repository.list_records(user_id=user_id, min_score=85)
 
     def list_history(self, user_id: int) -> List[SearchHistory]:
         """

@@ -9,7 +9,7 @@ except ImportError:
 load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint:raw_text")
+QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint_raw_queue")
 
 DIRTY_HTML = '''
 <html>
@@ -44,6 +44,16 @@ if __name__ == '__main__':
         print('Redis bağlantısı kurulamadı:', e)
         raise SystemExit(1)
 
-    # Push the dirty HTML to the queue
-    client.lpush(QUEUE_NAME, DIRTY_HTML)
-    print('Test mesajı kuyruğa başarıyla eklendi.')
+    payload = {
+        "kaynak": "manual_test",
+        "hedef_url": "https://example.test/company",
+        "iletisim_bilgileri": {
+            "telefonlar": ["+90 258 000 0000"],
+            "e_postalar": ["info@ornektekstil.com"],
+        },
+        "ham_metin": DIRTY_HTML,
+    }
+
+    # Push canonical JSON payload to the queue
+    client.lpush(QUEUE_NAME, json.dumps(payload, ensure_ascii=False))
+    print('Test mesajı kuyruğa başarıyla eklendi (osint_raw_queue, JSON payload).')

@@ -26,6 +26,7 @@ class CompanyCreate(BaseModel):
     industry: Optional[str] = Field(None, max_length=256)
     city: Optional[str] = Field(None, max_length=128)
     confidence_score: int = Field(..., ge=85, le=100)
+    search_history_id: Optional[int] = Field(default=None, ge=1)
     officials: Optional[List[CompanyOfficialCreate]] = None
 
     model_config = ConfigDict(from_attributes=True)

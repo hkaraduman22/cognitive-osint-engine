@@ -11,23 +11,26 @@ from app.database import get_db
 from app.models.company import Company
 from app.schemas.company_schema import CompanyCreate, CompanyResponse
 from app.services.company_service import create_elite_company, get_companies
+from app.utils.dependencies import get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def execute_real_scraper_bot(query: str) -> None:
+def execute_real_scraper_bot(query: str, search_history_id: int | None = None) -> None:
     """
     Hedef arama botunu bagimsiz bir alt surec olarak arkada baslatan
     ve ana sunucu bloklanmasini engelleyen yardimci fonksiyon.
     """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.abspath(os.path.join(current_dir, "../../../../"))
+        project_root = os.path.abspath(os.path.join(current_dir, "../../../"))
         scraper_dir = os.path.join(project_root, "scraper-bot")
 
         python_executable = sys.executable
         command = [python_executable, "main.py", "--sorgu", query]
+        if search_history_id is not None:
+            command.extend(["--search-history-id", str(search_history_id)])
 
         logger.info(f"OSINT tarama botu baslatiliyor: {' '.join(command)}")
         subprocess.Popen(command, cwd=scraper_dir)
@@ -37,13 +40,17 @@ def execute_real_scraper_bot(query: str) -> None:
 
 
 @router.post("/companies/scan", status_code=status.HTTP_202_ACCEPTED)
-def trigger_osint_scan(background_tasks: BackgroundTasks, query: Optional[str] = Query("Denizli Tekstil")) -> Dict[
+def trigger_osint_scan(
+    background_tasks: BackgroundTasks,
+    query: Optional[str] = Query("Denizli Tekstil"),
+    search_history_id: Optional[int] = Query(None, ge=1),
+) -> Dict[
     str, str]:
     """
     Delphi arayuzunden gelen tarama istegini karsilayan ve
     sureci arkaplan gorevlerine devreden uc nokta.
     """
-    background_tasks.add_task(execute_real_scraper_bot, query)
+    background_tasks.add_task(execute_real_scraper_bot, query, search_history_id)
     return {"status": "success", "message": "OSINT tarama islemi arkaplanda baslatildi."}
 
 
@@ -71,6 +78,8 @@ def list_companies(
         min_confidence: int = Query(85, alias="min_puan", ge=0, le=100),
         limit: int = Query(50, ge=1, le=200),
         skip: int = Query(0, ge=0),
+        search_history_id: Optional[int] = Query(None, alias="arama_id", ge=1),
+    current_user: dict = Depends(get_current_user),
         db: Session = Depends(get_db),
 ) -> List[Company]:
     """
@@ -84,7 +93,9 @@ def list_companies(
             industry=industry,
             min_confidence=min_confidence,
             limit=limit,
-            skip=skip
+            skip=skip,
+            search_history_id=search_history_id,
+            current_user=current_user,
         )
         return companies
     except Exception as exc:
