@@ -1,0 +1,2 @@
+ALTER TABLE companies
+ADD COLUMN IF NOT EXISTS source_url VARCHAR(1024);

@@ -24,7 +24,7 @@ def execute_real_scraper_bot(query: str, search_history_id: int | None = None) -
     """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.abspath(os.path.join(current_dir, "../../../"))
+        project_root = os.path.abspath(os.path.join(current_dir, "../../../../"))
         scraper_dir = os.path.join(project_root, "scraper-bot")
 
         python_executable = sys.executable

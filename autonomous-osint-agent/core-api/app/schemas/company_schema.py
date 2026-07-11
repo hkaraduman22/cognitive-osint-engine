@@ -25,6 +25,7 @@ class CompanyCreate(BaseModel):
     name: str = Field(..., max_length=256)
     industry: Optional[str] = Field(None, max_length=256)
     city: Optional[str] = Field(None, max_length=128)
+    source_url: Optional[str] = Field(None, max_length=1024)
     confidence_score: int = Field(..., ge=85, le=100)
     search_history_id: Optional[int] = Field(default=None, ge=1)
     officials: Optional[List[CompanyOfficialCreate]] = None
@@ -46,6 +47,7 @@ class CompanyResponse(BaseModel):
     name: str
     industry: Optional[str]
     city: Optional[str]
+    source_url: Optional[str]
     confidence_score: int
     created_at: datetime
     officials: List[CompanyOfficialResponse]

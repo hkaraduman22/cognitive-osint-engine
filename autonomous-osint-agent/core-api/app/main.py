@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import engine
+from app.database import engine, ensure_mvp_schema
 from app import models
 from app.controllers.auth_controller import router as auth_router
 from app.controllers.search_controller import router as search_router
@@ -14,6 +14,7 @@ from app.routers.scraper_router import router as scraper_router
 
 # Ensure database tables exist on startup
 models.Base.metadata.create_all(bind=engine)
+ensure_mvp_schema()
 
 # Configure root logging so module loggers (logger.info/err) are visible in uvicorn output
 logging.basicConfig(level=logging.INFO)

@@ -14,6 +14,7 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
 
     if existing_company:
         existing_company.industry = company_in.industry
+        existing_company.source_url = company_in.source_url
         existing_company.confidence_score = company_in.confidence_score
 
         if company_in.officials is not None:
@@ -42,6 +43,7 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
         name=company_in.name,
         industry=company_in.industry,
         city=company_in.city,
+        source_url=company_in.source_url,
         confidence_score=company_in.confidence_score,
     )
 

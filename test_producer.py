@@ -1,49 +1,39 @@
 import os
-from dotenv import load_dotenv
+import sys
 
-try:
-    import redis
-except ImportError:
-    redis = None
 
-load_dotenv()
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+SCRAPER_PATH = os.path.join(PROJECT_ROOT, "scraper-bot")
+if SCRAPER_PATH not in sys.path:
+    sys.path.insert(0, SCRAPER_PATH)
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint:raw_text")
+from core.storage import QueueDataStorage
 
-DIRTY_HTML = '''
+
+DIRTY_HTML = """
 <html>
 <head><title>Hakkımızda - Örnek Denizli Tekstil</title></head>
 <body>
-<nav>Menu | Hakkımızda | Ürünler | İletişim</nav>
+<nav>Menü | Hakkımızda | Ürünler | İletişim</nav>
 <header>Örnek Denizli Tekstil - %100 yerli üretim!</header>
 <main>
 <h1>Hakkımızda</h1>
-<p>Biz, 1998'den beri tekstil sektöründe faaliyet gösteren, Denizli merkezli bir firmayız. Fabrikamız Denizli Organize Sanayi Bölgesi'nde yer almakta olup; üretimimiz <strong>terzi işi</strong> ve seri üretimi kapsamaktadır.</p>
-<p>Üretim Alanlarımız: tişört, pamuklu kumaş, spor giyim ve teknik tekstiller.</p>
-<section>
-<h2>İletişim</h2>
-<p>Adres: Denizli OSB, 3. cadde, No:12\nTelefon: +90 258 000 0000\nE-posta: info@ornektekstil.com</p>
-</section>
+<p>1998'den beri tekstil sektöründe faaliyet gösteren Denizli merkezli bir firmayız.</p>
+<p>Üretim alanlarımız: tişört, pamuklu kumaş, spor giyim ve teknik tekstiller.</p>
+<p>Telefon: +90 258 000 0000 - E-posta: info@ornektekstil.com</p>
 </main>
-<footer>© 2026 Örnek Tekstil | <a href='/privacy'>Privacy</a> | Social Links</footer>
-<script>var a = 1; /* ads and trackers */</script>
 </body>
 </html>
-'''
+"""
 
-if __name__ == '__main__':
-    if redis is None:
-        print('redis kütüphanesi yüklenmemiş. Lütfen pip install redis')
-        raise SystemExit(1)
 
-    client = redis.from_url(REDIS_URL, decode_responses=True)
-    try:
-        client.ping()
-    except Exception as e:
-        print('Redis bağlantısı kurulamadı:', e)
-        raise SystemExit(1)
-
-    # Push the dirty HTML to the queue
-    client.lpush(QUEUE_NAME, DIRTY_HTML)
-    print('Test mesajı kuyruğa başarıyla eklendi.')
+if __name__ == "__main__":
+    storage = QueueDataStorage()
+    storage.save(
+        {
+            "kaynak": "manual_test",
+            "hedef_url": "https://example.test/company",
+            "ham_metin": DIRTY_HTML,
+        }
+    )
+    print(f"Test mesajı kuyruğa eklendi. Backend: {storage.backend}")

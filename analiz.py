@@ -75,7 +75,12 @@ class AnalizMotoru:
             "officials": [{"full_name": "Belirtilmemiş", "title": "Bilinmeyen Unvan"}]
         }
 
-    async def analiz_et(self, ham_metin: str) -> list[dict[str, Any]]:
+    async def analiz_et(
+        self,
+        ham_metin: str,
+        search_history_id: int | None = None,
+        source_url: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Gelen ham metni temizler, Groq API üzerinden LLM analizine gönderir ve doğrulanmış sonuçları döner.
         """
@@ -148,7 +153,11 @@ class AnalizMotoru:
             elites: list[dict[str, Any]] = [item for item in results if item.get("confidence_score", 0) >= 85]
 
             if elites and self.api_url:
-                await self._post_companies_to_api_async(elites)
+                await self._post_companies_to_api_async(
+                    elites,
+                    search_history_id=search_history_id,
+                    source_url=source_url,
+                )
 
             return results
 
@@ -156,7 +165,12 @@ class AnalizMotoru:
             logger.error(f"GROQ_ERROR: {e}")
             return [self._build_fallback_result(str(e))]
 
-    async def _post_companies_to_api_async(self, companies: list[dict[str, Any]]) -> None:
+    async def _post_companies_to_api_async(
+        self,
+        companies: list[dict[str, Any]],
+        search_history_id: int | None = None,
+        source_url: str | None = None,
+    ) -> None:
         """
         Nitelikli elit verileri Core API'ye asenkron olarak güvenli şekilde POST eder.
         """
@@ -176,6 +190,10 @@ class AnalizMotoru:
                     "confidence_score": c.get("confidence_score", 85),
                     "officials": c.get("officials", [{"full_name": "Belirtilmemiş", "title": "Bilinmeyen Unvan"}])
                 }
+                if search_history_id is not None:
+                    payload["search_history_id"] = search_history_id
+                if source_url:
+                    payload["source_url"] = source_url
                 try:
                     resp = await client.post(self.api_url, json=payload, headers=headers, timeout=15)
                     if resp.status_code in (200, 201):

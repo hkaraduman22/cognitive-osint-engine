@@ -13,6 +13,7 @@ class Company(Base):
     name: Mapped[str] = Column(String(256), nullable=False, index=True)
     industry: Mapped[str] = Column(String(256), nullable=True)
     city: Mapped[str] = Column(String(128), nullable=True, index=True)
+    source_url: Mapped[str | None] = Column(String(1024), nullable=True)
     confidence_score: Mapped[int] = Column(Integer, nullable=False)
     created_at: Mapped[datetime] = Column(DateTime, default=datetime.utcnow, nullable=False)
 

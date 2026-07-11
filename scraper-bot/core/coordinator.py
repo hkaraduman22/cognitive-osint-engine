@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from typing import List, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 from core.interfaces import IHtmlParser, IDataStorage, IUrlFetcher
@@ -14,7 +15,11 @@ class DataDrivenCoordinator:
         self._sources_db: Dict[str, Any] = ConfigLoader.load_sources(config_path)
 
     def _resolve_fetchers(self, query: str) -> Tuple[List[IUrlFetcher], str]:
-        normalized_query = query.lower()
+        normalized_query = "".join(
+            character
+            for character in unicodedata.normalize("NFKD", query.casefold().replace("ı", "i"))
+            if not unicodedata.combining(character)
+        )
 
         selected_fetchers: List[IUrlFetcher] = [
             FreeGlobalUrlFetcher(suffix="", delay=0.0),
@@ -30,7 +35,8 @@ class DataDrivenCoordinator:
         for city, components in self._sources_db.items():
             if city in normalized_query:
                 city_found = True
-                compiled_clean = re.compile(re.escape(city), re.IGNORECASE)
+                city_pattern = "[İIıi]stanbul" if city == "istanbul" else re.escape(city)
+                compiled_clean = re.compile(city_pattern, re.IGNORECASE)
                 cleaned_query = compiled_clean.sub("", cleaned_query).strip()
 
                 if "osb" in components:

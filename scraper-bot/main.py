@@ -1,5 +1,5 @@
 import argparse
-from core.storage import RedisDataStorage
+from core.storage import QueueDataStorage
 from core.coordinator import DataDrivenCoordinator
 from spiders.html_parser import GeneralHtmlParser
 
@@ -12,13 +12,13 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> None:
     args = parse_arguments()
 
-    storage = RedisDataStorage()
+    storage = QueueDataStorage()
     parser = GeneralHtmlParser()
 
     coordinator = DataDrivenCoordinator(parser=parser, storage=storage)
     coordinator.execute(args.sorgu, search_history_id=args.search_history_id)
 
-    print("\n[!] Tarama bitti. Veriler Redis 'osint_raw_queue' kuyruğuna gönderildi.")
+    print("\n[!] Tarama bitti. Veriler yapılandırılmış OSINT kuyruğuna gönderildi.")
 
 if __name__ == "__main__":
     main()
