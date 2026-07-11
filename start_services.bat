@@ -13,7 +13,7 @@ timeout /t 3 /nobreak >nul
 
 :: 2. SQLite kuyruk dinleyicisini baslat
 echo [2/2] SQLite Queue Listener Baslatiliyor...
-start "SQLite Queue Listener" cmd /k "call .venv\Scripts\activate.bat && set QUEUE_BACKEND=sqlite && python redis_listener.py"
+start "SQLite Queue Listener" cmd /k "call .venv\Scripts\activate.bat && set ""QUEUE_BACKEND=sqlite"" && python redis_listener.py"
 
 echo.
 echo ===================================================

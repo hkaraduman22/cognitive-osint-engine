@@ -11,7 +11,7 @@ class QueueDataStorage(IDataStorage):
 
     def __init__(self) -> None:
         self.queue_name = os.getenv("OSINT_REDIS_QUEUE", "osint_raw_queue")
-        self.backend = os.getenv("QUEUE_BACKEND", "sqlite").lower()
+        self.backend = os.getenv("QUEUE_BACKEND", "sqlite").strip().lower()
         if self.backend == "redis":
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             self._redis = redis.from_url(redis_url, decode_responses=True)

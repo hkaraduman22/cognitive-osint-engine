@@ -24,7 +24,7 @@ logger = logging.getLogger("OSINT_Listener")
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 QUEUE_NAME = os.getenv("OSINT_REDIS_QUEUE", "osint_raw_queue")
-QUEUE_BACKEND = os.getenv("QUEUE_BACKEND", "sqlite").lower()
+QUEUE_BACKEND = os.getenv("QUEUE_BACKEND", "sqlite").strip().lower()
 
 
 async def process_queue_message(data_json: str, ai_engine: AnalizMotoru) -> dict:
