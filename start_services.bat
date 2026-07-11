@@ -11,9 +11,9 @@ start "FastAPI Backend" cmd /k "call .venv\Scripts\activate.bat && cd autonomous
 :: Sunucunun hazir hale gelmesi icin 3 saniye bekleme süresi
 timeout /t 3 /nobreak >nul
 
-:: 2. Canli Ortam Redis Dinleyicisini (Listener) Baslat
-echo [2/2] Redis Dinleyicisi Baslatiliyor...
-start "Redis Listener" cmd /k "call .venv\Scripts\activate.bat && python redis_listener.py"
+:: 2. SQLite kuyruk dinleyicisini baslat
+echo [2/2] SQLite Queue Listener Baslatiliyor...
+start "SQLite Queue Listener" cmd /k "call .venv\Scripts\activate.bat && set QUEUE_BACKEND=sqlite && python redis_listener.py"
 
 echo.
 echo ===================================================

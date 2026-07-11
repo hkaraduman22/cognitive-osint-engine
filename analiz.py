@@ -37,6 +37,14 @@ class AnalizSonucu(BaseModel):
 
 
 load_dotenv()
+_core_api_env = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "autonomous-osint-agent",
+    "core-api",
+    ".env",
+)
+if os.path.exists(_core_api_env):
+    load_dotenv(_core_api_env, override=False)
 logger = logging.getLogger("AnalizMotoru")
 
 
