@@ -14,6 +14,7 @@ class BaseSpider:
             parsed_data = self._parser.parse(url)
             if parsed_data:
                 payload = {
+                    "query": query,
                     "kaynak": self._fetcher.source_id,
                     "hedef_url": url,
                     "iletisim_bilgileri": {

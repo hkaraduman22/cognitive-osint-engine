@@ -45,6 +45,70 @@ COMPANY_API_KEY = os.getenv("COMPANY_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
 
+CITY_KEYWORDS = {
+    "adana", "adiyaman", "afyonkarahisar", "agri", "aksaray", "amasya", "ankara", "antalya", "ardahan",
+    "artvin", "aydin", "balikesir", "bartin", "batman", "bayburt", "bilecik", "bingol", "bitlis", "bolu",
+    "burdur", "bursa", "canakkale", "cankiri", "corum", "denizli", "diyarbakir", "duzce", "edirne", "elazig",
+    "erzincan", "erzurum", "eskisehir", "gaziantep", "giresun", "gumushane", "hakkari", "hatay", "igdir",
+    "isparta", "istanbul", "izmir", "kahramanmaras", "karabuk", "karaman", "kars", "kastamonu", "kayseri",
+    "kilis", "kirikkale", "kirklareli", "kirsehir", "kocaeli", "konya", "kutahya", "malatya", "manisa",
+    "mardin", "mersin", "mugla", "mus", "nevsehir", "nigde", "ordu", "osmaniye", "rize", "sakarya",
+    "samsun", "siirt", "sinop", "sivas", "sanliurfa", "sirnak", "tekirdag", "tokat", "trabzon", "tunceli",
+    "usak", "van", "yalova", "yozgat", "zonguldak",
+}
+
+INDUSTRY_KEYWORDS = {
+    "yazilim", "tekstil", "konfeksiyon", "kumas", "dokuma", "iplik", "hazir", "giyim", "hali", "lojistik",
+    "sigorta", "egitim", "medya", "reklam", "otel", "restoran", "market",
+}
+
+INDUSTRY_SYNONYMS = {
+    "yazilim": {
+        "yazilim", "software", "bilisim", "bilgi teknolojileri", "it", "teknoloji", "erp", "web yazilim",
+    },
+    "tekstil": {
+        "tekstil", "konfeksiyon", "dokuma", "iplik", "hazir giyim", "kumas",
+    },
+}
+
+QUERY_STOPWORDS = {
+    "firma", "firmasi", "firmalari", "sirket", "sirketi", "sirketleri", "kurum", "kurumlari", "ve", "ile",
+    "icin", "hakkinda", "ara", "arama", "bul", "en", "iyi",
+}
+
+
+def normalize_text(value: str | None) -> str:
+    if not value:
+        return ""
+    lowered = value.casefold()
+    table = str.maketrans({
+        "ı": "i", "İ": "i", "ğ": "g", "Ğ": "g", "ü": "u", "Ü": "u",
+        "ş": "s", "Ş": "s", "ö": "o", "Ö": "o", "ç": "c", "Ç": "c",
+    })
+    cleaned = lowered.translate(table)
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def extract_query_constraints(query_text: str | None) -> tuple[str | None, str | None, list[str]]:
+    normalized_query = normalize_text(query_text)
+    if not normalized_query:
+        return None, None, []
+
+    tokens = [t for t in normalized_query.split() if t and t not in QUERY_STOPWORDS]
+    expected_city = next((t for t in tokens if t in CITY_KEYWORDS), None)
+    expected_industry = next((t for t in tokens if t in INDUSTRY_KEYWORDS), None)
+    return expected_city, expected_industry, tokens
+
+
+def industry_matches(expected_industry: str | None, normalized_industry: str) -> bool:
+    if not expected_industry:
+        return False
+
+    synonym_set = INDUSTRY_SYNONYMS.get(expected_industry, {expected_industry})
+    return any(synonym in normalized_industry for synonym in synonym_set)
+
+
 def clean_text(raw: str) -> str:
     """Clean HTML or plain text to minimize token count and noise.
 
@@ -213,7 +277,7 @@ def post_company_to_api(payload: dict) -> Tuple[bool, int]:
         return (False, 0)
 
 
-def extract_input_text(raw_message: str) -> Tuple[str, str | None, str | None, int | None]:
+def extract_input_text(raw_message: str) -> Tuple[str, str | None, str | None, int | None, str | None]:
     """Normalize incoming queue payload to the text sent to the LLM.
 
     Expected canonical payload is a JSON object with ham_metin.
@@ -224,16 +288,17 @@ def extract_input_text(raw_message: str) -> Tuple[str, str | None, str | None, i
         logger.info("[Listener] JSON parse başarılı")
     except json.JSONDecodeError:
         logger.warning("[Listener] JSON parse başarısız; plain text fallback uygulanıyor")
-        return clean_text(raw_message), None, None, None
+        return clean_text(raw_message), None, None, None, None
 
     if not isinstance(parsed_payload, dict):
         logger.warning("JSON payload object değil; ham mesaj fallback ile işlenecek")
-        return clean_text(raw_message), None, None, None
+        return clean_text(raw_message), None, None, None, None
 
     source = parsed_payload.get("kaynak")
     target_url = parsed_payload.get("hedef_url")
     raw_text = parsed_payload.get("ham_metin")
     raw_search_history_id = parsed_payload.get("search_history_id")
+    query_text = parsed_payload.get("query") or parsed_payload.get("sorgu") or parsed_payload.get("search_query")
 
     search_history_id = None
     if raw_search_history_id is not None:
@@ -256,16 +321,16 @@ def extract_input_text(raw_message: str) -> Tuple[str, str | None, str | None, i
             target_url,
             sorted(parsed_payload.keys()),
         )
-        return "", source, target_url, search_history_id
+        return "", source, target_url, search_history_id, query_text
 
-    return clean_text(str(raw_text)), source, target_url, search_history_id
+    return clean_text(str(raw_text)), source, target_url, search_history_id, query_text
 
 
 def process_message(model, redis_client, queue_name: str, raw_message: str) -> None:
     """Main processing: clean, call Gemini, evaluate score and post if high-quality."""
     logger.info("[Listener] Queue received")
     logger.info("[Listener] Payload=%s", raw_message)
-    cleaned, source, target_url, search_history_id = extract_input_text(raw_message)
+    cleaned, source, target_url, search_history_id, query_text = extract_input_text(raw_message)
     if not cleaned:
         logger.warning("Boş ya da temizlenemeyen metin atlandı")
         logger.info("[Listener] Discard=True")
@@ -277,26 +342,51 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
 
     system_instruction = (
         "SEN BIR OSINT SIRKET ESLESTIRME MOTORUSUN. "
-        "Gorevin, scraper'dan gelen sirket adaylarini kullanici sorgusuna gore filtrelemektir. "
-        "Yanlis pozitif uretmek en buyuk hatadir. Emin degilsen sirketi dondurme. "
+        "Gorevin, scraper'dan gelen adaylarin kullanici sorgusuyla ne kadar alakali oldugunu puanlamaktir. "
+        "Confidence, sirketin gercek olup olmamasina gore degil, sorgu uyumuna gore verilir. "
+        "Gecerli olmayan en buyuk hata yanlis pozitif uretmektir. Emin degilsen reddet. "
         "\n\n"
-        "KURALLAR: "
-        "1) Kullanici sorgusundaki sehir, sektor, faaliyet alani ve anahtar kelimelerle yuksek derecede uyum ara. "
-        "Aday sirket bu sinyallerin tamamina guclu sekilde uymuyorsa reddet. "
-        "2) Sirket adinda anahtar kelimenin gecmesi tek basina yeterli degildir. "
-        "Karari faaliyet alanina gore ver. "
-        "Ornek: Cengaver Lojistik Petrol Otomotiv Insaat Tekstil adinda gecse bile faaliyet lojistikse REDDET. "
-        "3) Sehir belirtilmisse yalnizca o sehirde faaliyet gosteren sirketleri kabul et, diger sehirleri reddet. "
-        "4) Su kurumlari ASLA sirket kabul etme: Ticaret Odasi, Belediye, Universite, Bakanlik, Vakif, Dernek, kamu kurumu, meslek odasi, federasyon. "
-        "5) Anahtar kelime benzerligi tek basina yeterli degildir. "
-        "Ornek Ankara Hali sorgusunda hali ureticisi/magazasi/fabrikasi/toptancisi/zemin kaplama kabul; hali saha/spor tesisi/futbol kulubu reddet. "
-        "Ornek Denizli tekstil sorgusunda tekstil/konfeksiyon/kumas uretimi/hazir giyim/dokuma/iplik uretimi kabul; lojistik/sigorta/yazilim/web tasarim/reklam/medya/restoran/market/otel reddet. "
-        "6) Sirket sektoru veya faaliyet alani net degilse REDDET. Tahmin yapma. "
-        "7) Confidence kurallari: 100 = sehir + sektor + faaliyet alani tamamen uyuyor; 95 = cok guclu eslesme; 90 = uyuyor ama kucuk belirsizlik var; 85 = zayif ama hala kabul edilebilir iliski. 80 ve altini uretme. "
-        "8) Sorguyla ilgisi olmayan hicbir sirketi dondurme. 5 dogru sonuc, 20 yanlis sonuctan daha degerlidir. "
+        "ONCELIK SIRASI: 1) kullanicinin arama niyeti 2) firma adi 3) sehir 4) sektor 5) diger bilgiler. "
+        "Bir aday sadece gercek bir kurum veya sirket oldugu icin yuksek confidence alamaz. "
+        "Arama niyetiyle uyum yoksa reddedilir. "
+        "\n\n"
+        "DEGERLENDIRME KRITERLERI: "
+        "- Sehir eslesmesi "
+        "- Sektor eslesmesi "
+        "- Firma adinin sorgudaki ana kelimeleri icermesi "
+        "- Sayfanin gercekten bu firmayi anlatiyor olmasi "
+        "- Sayfanin sorguyla dogrudan iliskili olmasi "
+        "\n\n"
+        "KATI KURALLAR: "
+        "1) Sehir farkliysa confidence ciddi sekilde dusur. "
+        "Ankara Yazilim sorgusunda Istanbul Yazilim gercek olsa bile yuksek confidence alamaz. "
+        "2) Sektor farkliysa confidence cok dusuk olmali; Ankara Ticaret Odasi veya Ankara Egitim gibi adaylari reddet. "
+        "3) Firma adi sorguyla ilgisizse confidence cok dusuk olmali. "
+        "4) Firma gercek olsa bile arama niyetiyle uyusmuyorsa reddet. "
+        "5) Sorgu ile dogrudan alakasiz kurumlari kesinlikle kabul etme. "
+        "\n\n"
+        "CONFIDENCE ARALIKLARI: "
+        "95-100 = sehir + sektor + firma adi guclu sekilde eslesiyor. "
+        "85-94 = kucuk farklar var ama kullanici buyuk ihtimalle bunu ariyor. "
+        "60-84 = kismen alakali. "
+        "0-59 = ilgisiz; bu durumda null dondur. "
+        "Gercek kurum oldugu icin asla yuksek confidence verme. "
+        "\n\n"
+        "ORNEKLER: "
+        "Sorgu: Ankara Yazilim. "
+        "Ankara Yazilim AS -> 100. "
+        "ABC Yazilim Ankara -> 97. "
+        "Makrops Yazilim Istanbul -> 70. "
+        "Ankara Ticaret Odasi -> 20. "
+        "Konya Ticaret Odasi -> 5. "
+        "Ankara Egitim Kurumlari -> 5. "
+        "ASO 1. Organize Sanayi -> 10. "
+        "\n\n"
+        "KURUM FILTRESI: Ticaret Odasi, Belediye, Universite, Bakanlik, Vakif, Dernek, kamu kurumu, meslek odasi, federasyon adaylarini reddet. "
         "\n\n"
         "JSON disinda hicbir sey yazma. "
-        "Her sirket icin yalnizca su alanlari dondur: name, industry, city, confidence. "
+        "Her sirket icin yalnizca name, industry, city, confidence alanlarini dondur. "
+        "0-59 arasi bir aday icin confidence alanini null yap ve adayi fiilen reddet. "
         "Uygun aday yoksa yalnizca bos JSON dondur: {}"
     )
 
@@ -364,50 +454,114 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
     name = parsed.get("name")
     city = parsed.get("city")
     industry = parsed.get("industry")
-    confidence = parsed.get("confidence_score")
+    raw_confidence = parsed.get("confidence_score")
+    confidence = None
 
     logger.info("[Listener] Company name=%s", name)
 
     try:
-        confidence = int(confidence)
+        confidence = int(raw_confidence)
     except Exception:
-        logger.warning("confidence_score numeric değil veya yok; veri elendi")
-        logger.info("[Listener] Confidence=%s", confidence)
-        logger.info("[Listener] Confidence passed=False")
+        confidence = 0
+        logger.warning("confidence_score numeric değil veya yok; payload için 0 atanacak")
+
+    logger.info("[Listener] Confidence=%s", confidence)
+
+    expected_city, expected_industry, query_tokens = extract_query_constraints(query_text)
+    normalized_name = normalize_text(name)
+    normalized_city = normalize_text(city)
+    normalized_industry = normalize_text(industry)
+
+    name_keywords = [token for token in query_tokens if token != expected_city]
+
+    def emit_validation_debug(
+        *,
+        city_matched_value: bool,
+        industry_matched_value: bool,
+        name_matched_value: bool,
+        accepted_value: bool,
+        reject_reason_value: str,
+        payload_value: dict | None,
+    ) -> None:
+        logger.info("====================================================")
+        logger.info("Query=%s", query_text or "")
+        logger.info("Company=%s", name or "")
+        logger.info("City=%s", city or "")
+        logger.info("Industry=%s", industry or "")
+        logger.info("CityMatch=%s", city_matched_value)
+        logger.info("IndustryMatch=%s", industry_matched_value)
+        logger.info("Accepted=%s", accepted_value)
+        logger.info("RejectReason=%s", reject_reason_value)
+        logger.info("NameMatch=%s", name_matched_value)
+        logger.info("confidence=%s", confidence)
+        logger.info("POST payload=%s", payload_value if payload_value is not None else "N/A")
+        logger.info("====================================================")
+
+    city_required = bool(expected_city)
+    city_match = (normalized_city == expected_city) if city_required else True
+    industry_required = bool(expected_industry)
+    industry_match = industry_matches(expected_industry, normalized_industry) if industry_required else True
+    name_match = bool(name_keywords) and any(token in normalized_name for token in name_keywords)
+
+    accepted = False
+    reject_reason = ""
+
+    if not query_tokens:
+        reject_reason = "QueryMissing"
+    elif city_required and not city_match:
+        reject_reason = "CityMismatch"
+    elif industry_required and not industry_match:
+        reject_reason = "IndustryMismatch"
+    elif not (city_required or industry_required):
+        reject_reason = "NoDeterministicConstraint"
+    else:
+        accepted = True
+
+    emit_validation_debug(
+        city_matched_value=city_match,
+        industry_matched_value=industry_match,
+        name_matched_value=name_match,
+        accepted_value=accepted,
+        reject_reason_value=reject_reason,
+        payload_value=None,
+    )
+
+    if not accepted:
         logger.info("[Listener] Discard=True")
         logger.info("[Listener] Finished")
         return
 
-    logger.info("[Listener] Confidence=%s", confidence)
-
-    if confidence >= 85:
-        logger.info("[Listener] Confidence passed=True")
-        payload = {"name": name, "city": city, "industry": industry, "confidence_score": confidence, "officials": []}
-        if search_history_id is not None:
-            payload["search_history_id"] = search_history_id
-        ok, status = post_company_to_api(payload)
-        if ok:
-            logger.info("Elit veri API'ye gönderildi (status=%s): %s", status, name)
-            logger.info("[Listener] POST başarılı")
-        else:
-            # If API rate limited, attempt to requeue and delay
-            if status == 429:
-                logger.warning("Core API 429 döndü; mesaj kuyruğa geri konuyor ve 10s uyku uygulanıyor")
-                try:
-                    logger.info("[Listener] Retry=True")
-                    logger.info("[Listener] Retry reason=api_429")
-                    redis_client.lpush(queue_name, raw_message)
-                except Exception:
-                    logger.exception("Mesaj kuyruğa tekrar eklenirken hata oluştu")
-                time.sleep(10)
-                logger.info("[Listener] Finished")
-                return
-            logger.error("API'ye gönderilemedi, status=%s; veri loglandı ve atlandı", status)
-            logger.info("[Listener] Retry=False")
-            logger.info("[Listener] Discard=True")
+    payload = {"name": name, "city": city, "industry": industry, "confidence_score": confidence, "officials": []}
+    if search_history_id is not None:
+        payload["search_history_id"] = search_history_id
+    emit_validation_debug(
+        city_matched_value=city_match,
+        industry_matched_value=industry_match,
+        name_matched_value=name_match,
+        accepted_value=accepted,
+        reject_reason_value=reject_reason,
+        payload_value=payload,
+    )
+    logger.info("POST payload=%s", payload)
+    ok, status = post_company_to_api(payload)
+    if ok:
+        logger.info("Elit veri API'ye gönderildi (status=%s): %s", status, name)
+        logger.info("[Listener] POST başarılı")
     else:
-        logger.info("Düşük puanlı veri elendi (confidence=%s): %s", confidence, name)
-        logger.info("[Listener] Confidence passed=False")
+        # If API rate limited, attempt to requeue and delay
+        if status == 429:
+            logger.warning("Core API 429 döndü; mesaj kuyruğa geri konuyor ve 10s uyku uygulanıyor")
+            try:
+                logger.info("[Listener] Retry=True")
+                logger.info("[Listener] Retry reason=api_429")
+                redis_client.lpush(queue_name, raw_message)
+            except Exception:
+                logger.exception("Mesaj kuyruğa tekrar eklenirken hata oluştu")
+            time.sleep(10)
+            logger.info("[Listener] Finished")
+            return
+        logger.error("API'ye gönderilemedi, status=%s; veri loglandı ve atlandı", status)
+        logger.info("[Listener] Retry=False")
         logger.info("[Listener] Discard=True")
 
     # Throttle to avoid hitting Gemini rate limits
