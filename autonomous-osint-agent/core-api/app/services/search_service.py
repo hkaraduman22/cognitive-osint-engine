@@ -24,7 +24,9 @@ if _project_root:
     if _scraper_bot_path not in sys.path:
         sys.path.insert(0, _scraper_bot_path)
 
-
+from core.coordinator import DataDrivenCoordinator
+from core.storage import QueueDataStorage
+from spiders.html_parser import GeneralHtmlParser
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,7 @@ def run_scraper_background(target_domain: str, keyword: str) -> None:
 
     try:
         # Bağımlılıkların temiz bir şekilde başlatılması (Clean Architecture)
-        storage = RedisDataStorage()
+        storage = QueueDataStorage()
         parser = GeneralHtmlParser()
         coordinator = DataDrivenCoordinator(parser=parser, storage=storage)
 
