@@ -1,3 +1,5 @@
+import unicodedata
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
@@ -7,15 +9,42 @@ from app.repositories.search_repository import SearchRepository
 from app.schemas.company_schema import CompanyCreate
 
 
+def _normalize_identity(value: str | None) -> str:
+    if not value:
+        return ""
+    folded = value.casefold().replace("ı", "i")
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    ).strip()
+
+
 def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
     search_repository = SearchRepository(db)
-    stmt = select(Company).where(Company.name == company_in.name, Company.city == company_in.city)
-    existing_company = db.scalars(stmt).first()
+    normalized_name = _normalize_identity(company_in.name)
+    normalized_city = _normalize_identity(company_in.city)
+    existing_company = next(
+        (
+            candidate
+            for candidate in db.scalars(select(Company)).all()
+            if _normalize_identity(candidate.name) == normalized_name
+            and _normalize_identity(candidate.city) == normalized_city
+        ),
+        None,
+    )
 
     if existing_company:
-        existing_company.industry = company_in.industry
-        existing_company.source_url = company_in.source_url
-        existing_company.confidence_score = company_in.confidence_score
+        if company_in.industry is not None:
+            existing_company.industry = company_in.industry
+        if company_in.city is not None:
+            existing_company.city = company_in.city
+        if company_in.source_url is not None:
+            existing_company.source_url = company_in.source_url
+        existing_company.confidence_score = max(
+            existing_company.confidence_score,
+            company_in.confidence_score,
+        )
 
         if company_in.officials is not None:
             existing_company.officials.clear()

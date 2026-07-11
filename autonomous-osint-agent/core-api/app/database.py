@@ -19,6 +19,12 @@ def ensure_mvp_schema() -> None:
     if "source_url" not in column_names:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE companies ADD COLUMN source_url VARCHAR(1024)"))
+    if "updated_at" not in column_names:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE companies ADD COLUMN updated_at TIMESTAMP"))
+            connection.execute(
+                text("UPDATE companies SET updated_at = created_at WHERE updated_at IS NULL")
+            )
 
 
 def get_db():

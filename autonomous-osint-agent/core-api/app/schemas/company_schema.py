@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from urllib.parse import urlparse
 
 
 class CompanyOfficialCreate(BaseModel):
@@ -30,6 +31,33 @@ class CompanyCreate(BaseModel):
     search_history_id: Optional[int] = Field(default=None, ge=1)
     officials: Optional[List[CompanyOfficialCreate]] = None
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Firma adı boş olamaz.")
+        return normalized
+
+    @field_validator("industry", "city")
+    @classmethod
+    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        return normalized or None
+
+    @field_validator("source_url")
+    @classmethod
+    def validate_source_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Kaynak URL http veya https adresi olmalıdır.")
+        return normalized
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -50,6 +78,7 @@ class CompanyResponse(BaseModel):
     source_url: Optional[str]
     confidence_score: int
     created_at: datetime
+    updated_at: datetime
     officials: List[CompanyOfficialResponse]
 
     model_config = ConfigDict(from_attributes=True)

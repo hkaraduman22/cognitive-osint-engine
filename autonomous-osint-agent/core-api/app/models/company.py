@@ -16,6 +16,12 @@ class Company(Base):
     source_url: Mapped[str | None] = Column(String(1024), nullable=True)
     confidence_score: Mapped[int] = Column(Integer, nullable=False)
     created_at: Mapped[datetime] = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
 
     officials = relationship("CompanyOfficial", back_populates="company", cascade="all, delete-orphan")
     search_links = relationship("SearchHistoryCompany", back_populates="company", cascade="all, delete-orphan")
