@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import os
 import sys
 import tempfile
@@ -29,6 +31,16 @@ def test_authenticated_search_to_company_results_flow() -> None:
         token = register_response.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
 
+        unauthorized_response = client.get("/api/v1/companies")
+        assert unauthorized_response.status_code == 401
+
+        empty_search_response = client.post(
+            "/api/v1/search/",
+            headers=headers,
+            json={"query": "   "},
+        )
+        assert empty_search_response.status_code == 422
+
         search_response = client.post(
             "/api/v1/search/",
             headers=headers,
@@ -50,6 +62,15 @@ def test_authenticated_search_to_company_results_flow() -> None:
             },
         )
         assert company_response.status_code == 201
+
+        low_confidence_response = client.post(
+            "/api/v1/companies",
+            json={
+                "name": "Düşük Güvenli Firma",
+                "confidence_score": 70,
+            },
+        )
+        assert low_confidence_response.status_code == 422
 
         results_response = client.get(
             f"/api/v1/companies?arama_id={search_id}",

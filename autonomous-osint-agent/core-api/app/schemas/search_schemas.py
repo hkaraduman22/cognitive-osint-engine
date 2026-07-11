@@ -1,11 +1,19 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SearchRequestDTO(BaseModel):
-    query: str = Field(..., max_length=512)
+    query: str = Field(..., min_length=1, max_length=512)
+
+    @field_validator("query")
+    @classmethod
+    def normalize_query(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Arama sorgusu boş olamaz.")
+        return normalized
 
 
 class SearchResponseDTO(BaseModel):
@@ -18,8 +26,7 @@ class SearchHistoryDTO(BaseModel):
     query: str
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecordDTO(BaseModel):
@@ -30,8 +37,7 @@ class RecordDTO(BaseModel):
     score: int
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BotLogDTO(BaseModel):
@@ -41,5 +47,4 @@ class BotLogDTO(BaseModel):
     message: Optional[str]
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

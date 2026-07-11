@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .company_schema import CompanyCreate, CompanyResponse
+from .company_schema import CompanyCreate, CompanyResponse  # noqa: F401
 
 
 # API girişleri için: kullanıcı kayıt / login verisi

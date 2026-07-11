@@ -24,9 +24,9 @@ if _project_root:
     if _scraper_bot_path not in sys.path:
         sys.path.insert(0, _scraper_bot_path)
 
-from core.coordinator import DataDrivenCoordinator
-from core.storage import QueueDataStorage
-from spiders.html_parser import GeneralHtmlParser
+from core.coordinator import DataDrivenCoordinator  # noqa: E402
+from core.storage import QueueDataStorage  # noqa: E402
+from spiders.html_parser import GeneralHtmlParser  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

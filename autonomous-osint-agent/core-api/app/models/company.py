@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, relationship
 
 from app.models.models import Base
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 class Company(Base):
@@ -15,11 +19,11 @@ class Company(Base):
     city: Mapped[str] = Column(String(128), nullable=True, index=True)
     source_url: Mapped[str | None] = Column(String(1024), nullable=True)
     confidence_score: Mapped[int] = Column(Integer, nullable=False)
-    created_at: Mapped[datetime] = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = Column(DateTime, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utc_now,
+        onupdate=utc_now,
         nullable=False,
     )
 
@@ -47,7 +51,7 @@ class SearchHistoryCompany(Base):
     search_history_id: Mapped[int] = Column(Integer, ForeignKey("search_history.id"), nullable=False, index=True)
     company_id: Mapped[int] = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     confidence_score: Mapped[int] = Column(Integer, nullable=False)
-    created_at: Mapped[datetime] = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = Column(DateTime, default=utc_now, nullable=False)
 
     search_history = relationship("SearchHistory", back_populates="company_links")
     company = relationship("Company", back_populates="search_links")

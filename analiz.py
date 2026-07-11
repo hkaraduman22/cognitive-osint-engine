@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import os
@@ -64,6 +63,19 @@ class AnalizMotoru:
             "Yalnızca JSON array döndür, açıklama yazma. Metin:\n[HAM_METIN]"
         )
 
+    def _clean_text_for_llm(self, raw_text: str) -> str:
+        """LLM maliyetini ve gürültüyü azaltmak için ham web metnini temizler."""
+        text = re.sub(
+            r"<(script|style|nav|footer|header|aside)\b[^>]*>.*?</\1>",
+            " ",
+            raw_text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"https?://\S+", " ", text)
+        text = re.sub(r"\b(?:privacy policy|cookie policy)\b", " ", text, flags=re.IGNORECASE)
+        return re.sub(r"\s{2,}", " ", text).strip()[:15000]
+
     def _build_fallback_result(self, reason: str) -> dict[str, Any]:
         """
         Herhangi bir hata durumunda sistemin durmaması için koruyucu fallback verisi üretir.
@@ -91,8 +103,7 @@ class AnalizMotoru:
             return [self._build_fallback_result("Groq client hazır değil")]
 
         # HTML etiketlerinin temizlenmesi ve gereksiz boşlukların sıkıştırılması
-        cleaned_text: str = re.sub(r"<[^>]+>", " ", ham_metin)
-        cleaned_text = re.sub(r"\s{2,}", " ", cleaned_text).strip()[:15000]
+        cleaned_text = self._clean_text_for_llm(ham_metin)
 
         try:
             # KRİTİK HATA DÜZELTMESİ: .format() yerine güvenli .replace() kullanılarak

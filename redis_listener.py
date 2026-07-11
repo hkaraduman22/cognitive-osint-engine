@@ -16,7 +16,7 @@ _SCRAPER_PATH = os.path.join(_PROJECT_ROOT, "scraper-bot")
 if _SCRAPER_PATH not in sys.path:
     sys.path.insert(0, _SCRAPER_PATH)
 
-from core.sqlite_queue import SQLiteMessageQueue
+from core.sqlite_queue import SQLiteMessageQueue  # noqa: E402
 
 # Günlükleme (Logging) sisteminin canlı ortam standartlarına uygun formatta yapılandırılması
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

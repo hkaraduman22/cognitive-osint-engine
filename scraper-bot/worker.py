@@ -12,7 +12,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 # ------------------------------------------------
 
-from analiz import AnalizMotoru
+from analiz import AnalizMotoru  # noqa: E402
 
 
 def worker():
