@@ -1,177 +1,104 @@
 # Cognitive OSINT Engine
 
-Yasal ve herkese açık kaynaklardan firma bilgileri toplayan, içerikleri analiz eden ve sonuçları kullanıcı sorgularıyla ilişkilendiren B2B firma rehberi MVP'sidir.
+Yasal ve herkese açık kaynaklardan (firma web siteleri, ticaret odaları, OSB rehberleri, iş ilanı ve sektör forumları) firma bilgisi toplayan, Groq LLM ile analiz edip güven puanı üreten bir **B2B firma ve profesyonel rehberi** MVP'sidir.
 
-Proje iki günlük kurtarma çalışması kapsamında mevcut kod korunarak çalışır hâle getirilmiştir. Docker, Redis veya Memurai gerektirmez. Süreçler arası mesaj kuyruğu varsayılan olarak yerel SQLite kullanır.
+Örnek kullanım: kullanıcı "İstanbul CNC freze üreticileri" yazar → sistem şehir/sektör anahtar kelimelerini ayırır → çok kaynaklı bir tarama başlatır → bulunan firmaları LLM ile doğrulayıp güven puanı ile birlikte veritabanına kaydeder → Delphi masaüstü arayüzünde (veya doğrudan API üzerinden) listeler.
 
-## MVP özellikleri
+## Sistem Yetenekleri
 
-- JWT tabanlı kullanıcı kaydı ve girişi
-- Arama geçmişi
-- DDGS ve yapılandırılmış açık kaynaklar üzerinden web taraması
-- HTML metni ve iletişim bilgisi çıkarma
-- SQLite tabanlı kalıcı mesaj kuyruğu
-- Groq tabanlı firma analizi ve güven puanı
-- Firma–arama geçmişi ilişkisi
-- Kaynak URL ve son güncelleme tarihi
-- Unicode/Türkçe uyumlu firma tekilleştirme
+- JWT tabanlı kimlik doğrulama + **refresh token rotasyonu** (çalıntı token tekrar kullanılırsa otomatik iptal)
+- **Docker Compose** ile tek komutla ayağa kalkan tam yığın (Postgres + Redis + FastAPI + Worker)
+- DuckDuckGo tabanlı çok kaynaklı tarama (genel arama, OSB, ticaret odası, iş ilanı, sektör forumu varyasyonları)
+- **User-Agent / Accept-Language / Referer rotasyonu** ve isteğe bağlı proxy desteği; 403 (bot engeli) alındığında farklı bir kimlikle **tek seferlik** otomatik yeniden deneme
+- Groq LLM (`llama-3.1-8b-instant`) ile firma tespiti, açıklama ve güven puanı üretimi; 429 (rate limit) hatalarında otomatik retry
+- Genişletilmiş firma verisi: ad, sektör, şehir, **adres, website, telefon (normalize edilmiş format), e-posta**, güven puanı, kaynak URL, son güncelleme
+- Unicode/Türkçe uyumlu firma tekilleştirme (aynı firma farklı kaynaklardan gelirse birleştirilir, veri kaybetmez)
+- **Job Status** takibi — bir taramanın `processing` / `finished` / `error` durumu API üzerinden sorgulanabilir
+- Docker servislerinde `restart: unless-stopped` — bir servis çökerse kendini otomatik onarır
 - Delphi VCL masaüstü istemcisi
-- Docker'sız Windows kurulumu
 
 ## Mimari
 
 ```text
-Delphi VCL
+Delphi VCL (veya doğrudan Swagger/curl)
     │ HTTP/JWT
     ▼
-FastAPI Core API
-    │ arama kimliği
+FastAPI Core API ──────────────► Postgres (firma/kullanıcı/arama verisi)
+    │ subprocess tetikler
     ▼
-Scraper Bot ──► SQLite Queue ──► Analiz Listener
-                                      │
-                                      ▼
-                                  Groq LLM
-                                      │
-                                      ▼
-                            Firma API'si / SQLite DB
+Scraper Bot (DDG + UA rotasyonu) ──► Redis Kuyruğu ──► Analiz Worker
+                                                            │
+                                                            ▼
+                                                        Groq LLM
+                                                            │
+                                                            ▼
+                                                  Firma API'si (POST /companies)
 ```
 
 Ana bileşenler:
 
-- `autonomous-osint-agent/core-api`: FastAPI ve SQLAlchemy backend
-- `scraper-bot`: açık web kaynaklarını tarayan producer
-- `redis_listener.py`: SQLite/Redis kuyruğunu tüketen analiz worker'ı
-- `analiz.py`: metin temizleme, Groq analizi ve güven puanı filtresi
-- `delphi-vcl-frontend`: masaüstü kullanıcı arayüzü
-- `tests`: kanonik MVP test paketi
+- `autonomous-osint-agent/core-api`: FastAPI + SQLAlchemy backend (auth, firma, arama, job-status uç noktaları)
+- `autonomous-osint-agent/docker-compose.yml`: Postgres, Redis, API ve Worker servislerini tanımlar
+- `scraper-bot`: açık web kaynaklarını UA/proxy rotasyonuyla tarayan producer
+- `redis_listener.py`: Redis kuyruğunu tüketen analiz worker'ı
+- `analiz.py`: metin temizleme, Groq analizi, retry mekanizması ve güven puanı filtresi
+- `delphi-vcl-frontend`: masaüstü kullanıcı arayüzü (kaynak kod — derleme notu aşağıda)
+- `tests`: kanonik test paketi (19 test)
 
 ## Gereksinimler
 
-- Windows 10/11
-- Python 3.12 veya üzeri
-- İnternet bağlantısı (yalnızca canlı web taraması ve Groq için)
-- İsteğe bağlı Groq API anahtarı
+- **Docker Desktop** (önerilen ve doğrulanmış ana yol)
+- Groq API anahtarı ([console.groq.com](https://console.groq.com)) — LLM analizi için
+- (İsteğe bağlı) RAD Studio 10.4+ — yalnızca Delphi arayüzünü kaynak koddan derlemek isterseniz
 
-Docker, WSL, Redis ve Memurai zorunlu değildir.
-
-## Kurulum
-
-PowerShell terminalini proje kökünde açın:
+## Kurulum ve Çalıştırma (Docker — önerilen yol)
 
 ```powershell
-cd C:\Users\Admin\Desktop\camart
+cd C:\Users\Admin\Desktop\camart\autonomous-osint-agent
+Copy-Item core-api\.env.example core-api\.env
 ```
 
-Sanal ortam yoksa oluşturun:
+`core-api\.env` dosyasını açıp `GROQ_API_KEY` alanını kendi anahtarınızla doldurun. Diğer alanlar (JWT_SECRET vb.) demo için varsayılan değerlerle çalışır; **prod'a çıkarken `JWT_SECRET` mutlaka değiştirilmelidir.**
 
 ```powershell
-py -m venv .venv
+docker compose up -d
 ```
 
-Sanal ortamı etkinleştirin:
+Servislerin sağlıklı ayakta olduğunu doğrulayın:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
+docker compose ps
 ```
 
-Bağımlılıkları yükleyin:
+4 servis de `Up` (postgres/redis için `healthy`) görünmelidir. Swagger arayüzü: `http://localhost:8000/docs`
+
+**Önemli:** `docker-compose.yml` içindeki bazı ortam değişkenleri (`DATABASE_URL`, `QUEUE_BACKEND=redis`) `.env` dosyasını kasıtlı olarak override eder — Docker ortamı her zaman Postgres + Redis kullanır, `.env`'deki `sqlite` varsayılanı yalnızca Docker'sız çalıştırmayı etkiler.
+
+Konfigürasyon değiştirdiğinizde (`docker-compose.yml` düzenlemesi gibi) **`docker compose restart` yeterli değildir** — konteynerlerin yeniden oluşturulması gerekir:
 
 ```powershell
-python -m pip install -r autonomous-osint-agent\core-api\requirements.txt
+docker compose up -d
 ```
 
-## Ortam ayarları
+## Delphi İstemcisi
 
-Örnek dosyayı kopyalayın:
+Kaynak kod `delphi-vcl-frontend/` altında, RAD Studio ile `OsintFrontend.dproj` açılarak derlenir.
 
-```powershell
-Copy-Item autonomous-osint-agent\core-api\.env.example autonomous-osint-agent\core-api\.env
-```
-
-`.env` içindeki zorunlu olmayan Groq anahtarını kendi hesabınıza göre ayarlayın:
-
-```dotenv
-GROQ_API_KEY=
-```
-
-Anahtar boşsa sistem durmaz; analiz motoru kontrollü fallback sonucu üretir. Gerçek LLM firma sınıflandırması için anahtar gereklidir.
-
-Gizli anahtarları Git'e eklemeyin.
-
-## Çalıştırma
-
-### Kolay yöntem
-
-Proje kökünde:
-
-```powershell
-.\start_services.bat
-```
-
-Bu betik iki terminal açar:
-
-1. FastAPI — `http://127.0.0.1:8000`
-2. SQLite Queue Listener
-
-Swagger:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-### Servisleri elle başlatma
-
-Birinci PowerShell:
-
-```powershell
-cd autonomous-osint-agent\core-api
-..\..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-İkinci PowerShell:
-
-```powershell
-cd C:\Users\Admin\Desktop\camart
-.\.venv\Scripts\python.exe redis_listener.py
-```
-
-### Manuel kuyruk testi
-
-Üçüncü PowerShell:
-
-```powershell
-.\.venv\Scripts\python.exe test_producer.py
-```
-
-Listener terminalinde `Kuyruktan Görev Alındı` mesajı görülmelidir.
+**Bilinen durum:** Mevcut derlenmiş `OsintFrontend.exe`, en son eklenen özellikleri (DPAPI ile kalıcı oturum, sonuç tablosu, Job Status göstergesi) **içermiyor** — bu ortamda RAD Studio bulunmadığı için kaynak kod derlenemedi. Backend bu eski `.exe` ile tam geriye dönük uyumludur (bkz. `TROUBLESHOOTING.md`). RAD Studio erişimi olan biri projeyi derlerse yeni özellikler otomatik devreye girer.
 
 ## Test
 
-Tüm kanonik test paketi:
-
 ```powershell
-.\.venv\Scripts\python.exe -m pytest
+.venv\Scripts\python.exe -m pytest tests\ -v
 ```
 
 Beklenen sonuç:
 
 ```text
-14 passed
+19 passed
 ```
 
-Statik kod kontrolü:
-
-```powershell
-.\.venv\Scripts\ruff.exe check autonomous-osint-agent\core-api\app analiz.py redis_listener.py scraper-bot tests
-```
-
-Beklenen sonuç:
-
-```text
-All checks passed!
-```
-
-## Demo akışı
+## Demo Akışı
 
 Önerilen sorgu:
 
@@ -179,65 +106,42 @@ All checks passed!
 İstanbul CNC freze üreticileri
 ```
 
-Sunum sırası:
+Sunum sırası (Docker ayaktayken):
 
-1. API ve listener'ı başlatın.
-2. Delphi uygulamasından kayıt olun veya giriş yapın.
-3. Arama ekranına örnek sorguyu girin.
-4. Arama geçmişi kimliğinin oluştuğunu gösterin.
-5. Scraper'ın açık kaynakları taradığını gösterin.
-6. Listener'ın SQLite kuyruğundan mesaj aldığını gösterin.
-7. Sonuç ekranında firma, şehir, sektör, güven puanı ve kaynak URL'yi gösterin.
+1. `docker compose ps` ile 4 servisin de çalıştığını gösterin.
+2. Swagger (`/docs`) veya Delphi'den kayıt olun/giriş yapın.
+3. `POST /api/v1/search/` ile arama kaydı oluşturun, `search_history_id` alın.
+4. `POST /api/v1/companies/scan` ile taramayı tetikleyin.
+5. `GET /api/v1/companies/scan-status?arama_id=...` ile durumun `processing` → `finished` geçişini gösterin.
+6. `GET /api/v1/companies?arama_id=...` ile firma, şehir, adres, website, telefon, e-posta, güven puanı ve kaynak URL'yi gösterin.
 
-Canlı internet veya LLM anahtarı kullanılamıyorsa test edilmiş yerel akış için `test_producer.py` kullanılabilir.
+İkinci örnek sorgu: `Avcılar Arçelik servisi`
 
-İkinci örnek sorgu:
+Canlı internet veya Groq erişimi sorunlu olursa önceden taranmış verilerle (`GET /api/v1/companies?min_puan=0`) devam edilebilir — bkz. `TROUBLESHOOTING.md`.
 
-```text
-Avcılar Arçelik servisi
-```
+## Veri ve Etik Sınırlar
 
-## Kuyruk backend'i
+Sistem yalnızca kamuya açık ve yasal kaynaklar için tasarlanmıştır. CAPTCHA, oturum kontrolü veya platform güvenliği aşılmaz. Gizli kişisel veri toplanmaz ve yayımlanmamış iletişim bilgisi tahmin edilmez. 403 alındığında yapılan tek seferlik kimlik rotasyonu bilinçli olarak sınırlıdır — Cloudflare/WAF korumalı siteler aşılmaya çalışılmaz.
 
-Varsayılan:
+## Bilinen Sınırlamalar
 
-```dotenv
-QUEUE_BACKEND=sqlite
-OSINT_QUEUE_DB=
-OSINT_REDIS_QUEUE=osint_raw_queue
-```
+- Canlı web sonuçları kaynakların erişilebilirliğine ve DDG'nin o anki sonuçlarına göre değişebilir; aynı sorgu farklı çalıştırmalarda farklı sayıda sonuç üretebilir.
+- Groq'un günlük token kotası hesaba göre sınırlıdır; doldurulursa fallback devreye girer ve o sayfa için sonuç kaydedilmez (veri kaybı değil, güvenli atlama).
+- Delphi arayüzünün en son özellikleri (yukarıya bakın) derlenmedi.
+- Personel endpoint'i MVP'de örnek/stub yanıt üretmektedir.
+- Firma tekilleştirme küçük MVP veri hacmine göre uygulama katmanında yapılır (yüksek hacimde SQL seviyesinde indexlenmesi gerekir).
+- Cloudflare/WAF korumalı siteler (örn. kariyer.net) UA rotasyonuyla aşılamaz — kasıtlı bir sınır.
+- Proje içinde eski geliştirme kopyaları repo dışına arşivlendi (`../camart_ARCHIVE_cognitive-osint-engine`); kanonik kök bu README'nin bulunduğu dizindir.
 
-SQLite kuyruğu ayrı Windows süreçleri arasında çalışır ve harici servis gerektirmez.
-`OSINT_QUEUE_DB` boş bırakılırsa proje kökündeki `osint_queue.db` otomatik kullanılır.
+## Teslim Durumu
 
-Gelecekte Redis kullanılacaksa:
-
-```dotenv
-QUEUE_BACKEND=redis
-REDIS_URL=redis://localhost:6379/0
-```
-
-## Veri ve etik sınırlar
-
-Sistem yalnızca kamuya açık ve yasal kaynaklar için tasarlanmıştır. CAPTCHA, oturum kontrolü veya platform güvenliği aşılmaz. Gizli kişisel veri toplanmaz ve yayımlanmamış iletişim bilgisi tahmin edilmez.
-
-## Bilinen sınırlamalar
-
-- Canlı web sonuçları kaynakların erişilebilirliğine göre değişebilir.
-- Gerçek LLM analizi için `GROQ_API_KEY` gerekir.
-- Personel endpoint'i MVP'de örnek yanıt üretmektedir.
-- Firma tekilleştirme küçük MVP veri hacmine göre uygulama katmanında yapılır.
-- Proje içinde eski geliştirme kopyaları bulunur; kanonik kök bu README'nin bulunduğu dizindir.
-- SQLite kuyruğu yüksek trafikli dağıtık üretim sistemi için değil, yerel MVP için seçilmiştir.
-- Kalan test uyarıları üçüncü taraf Starlette ve `python-jose` paketlerinden gelir.
-
-## Teslim durumu
-
-- API başlangıcı: başarılı
-- SQLite süreçler arası kuyruk: başarılı
-- Canlı scraper: başarılı
-- Arama–firma ilişkisi: başarılı
-- Kaynak URL ve güncelleme tarihi: başarılı
+- Docker Compose ile tek komutla ayağa kalkma: başarılı
+- Auth + refresh token rotasyonu: başarılı
+- Canlı çok kaynaklı scraper + UA rotasyonu: başarılı
+- Arama–firma ilişkisi + Job Status takibi: başarılı
+- Genişletilmiş firma verisi (adres/website/telefon/e-posta): başarılı
 - Tekilleştirme ve veri doğrulama: başarılı
-- Kanonik test paketi: 14/14 başarılı
-- Statik analiz: başarılı
+- Docker servis dayanıklılığı (`restart: unless-stopped`): başarılı, doğrulandı
+- Kanonik test paketi: **19/19 başarılı**
+
+Teslimat öncesi kontrol listesi için `CHECKLIST.md`, demo sırasında olası sorunlar için `TROUBLESHOOTING.md` dosyasına bakın.
