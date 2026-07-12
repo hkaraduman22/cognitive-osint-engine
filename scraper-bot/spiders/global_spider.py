@@ -1,6 +1,13 @@
 import time
 from typing import List
-from ddgs import DDGS
+
+try:
+    # 'duckduckgo-search' paketi 'ddgs' olarak yeniden adlandırıldı; hangisi
+    # kuruluysa onun üzerinden DDGS sınıfını almak için iki ismi de deniyoruz.
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS
+
 from core.interfaces import IUrlFetcher
 
 class FreeGlobalUrlFetcher(IUrlFetcher):
