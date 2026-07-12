@@ -13,7 +13,7 @@ from app.models.company import Company
 from app.repositories.bot_log_repository import BotLogRepository
 from app.schemas.company_schema import CompanyCreate, CompanyResponse, ScanStatusResponse
 from app.services.company_service import create_elite_company, get_companies
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, get_current_user_optional
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def resolve_scraper_directory() -> Path:
     raise FileNotFoundError(f"scraper-bot dizini bulunamadı. Kontrol edilen yollar: {checked_paths}")
 
 
-def execute_real_scraper_bot(query: str, user_id: int, search_history_id: int | None = None) -> None:
+def execute_real_scraper_bot(query: str, user_id: int | None, search_history_id: int | None = None) -> None:
     """
     Hedef arama botunu ayri bir alt surec olarak calistiran ve durumunu
     (processing/finished/error) BotLog tablosuna yazan yardimci fonksiyon.
@@ -87,13 +87,19 @@ def trigger_osint_scan(
     background_tasks: BackgroundTasks,
     query: Optional[str] = Query("Denizli Tekstil"),
     search_history_id: Optional[int] = Query(None, ge=1),
-    current_user: dict = Depends(get_current_user),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
 ) -> Dict[str, str]:
     """
     Delphi arayuzunden gelen tarama istegini karsilayan ve
     sureci arkaplan gorevlerine devreden uc nokta.
+
+    NOT: Auth burada opsiyoneldir - eski/derlenmemis Delphi istemciler bu uc noktaya
+    token gondermeden istek atabiliyor (bkz. proje gecmisi). Token varsa yine de
+    dogrulanir ve user_id BotLog'a yazilir; yoksa istek reddedilmez, sadece user_id
+    bilinmez (None) olarak kaydedilir.
     """
-    background_tasks.add_task(execute_real_scraper_bot, query, current_user["id"], search_history_id)
+    user_id = current_user["id"] if current_user else None
+    background_tasks.add_task(execute_real_scraper_bot, query, user_id, search_history_id)
     return {"status": "success", "message": "OSINT tarama islemi arkaplanda baslatildi."}
 
 

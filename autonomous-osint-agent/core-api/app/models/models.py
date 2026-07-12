@@ -70,7 +70,7 @@ class BotLog(Base):
     __tablename__ = "bot_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     search_history_id = Column(Integer, ForeignKey("search_history.id"), nullable=True, index=True)
     query = Column(String(512), nullable=False)
     status = Column(String(64), nullable=False)

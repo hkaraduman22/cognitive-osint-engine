@@ -137,6 +137,15 @@ def get_companies(
             .filter(*filters)
             .distinct()
         )
+    elif search_history_id is not None:
+        # Admin/anonim kullanici da arama_id ile filtreleyebilmeli; kullaniciya gore
+        # kisitlama yok ama arama_id filtresi yine de uygulanmali (onceden atlaniyordu).
+        query = (
+            query
+            .join(SearchHistoryCompany, SearchHistoryCompany.company_id == Company.id)
+            .filter(SearchHistoryCompany.search_history_id == search_history_id)
+            .distinct()
+        )
 
     if city:
         query = query.filter(Company.city.ilike(f"%{city}%"))

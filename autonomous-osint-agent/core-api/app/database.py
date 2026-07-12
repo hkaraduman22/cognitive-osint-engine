@@ -46,6 +46,14 @@ def ensure_mvp_schema() -> None:
                 connection.execute(
                     text("UPDATE bot_logs SET updated_at = created_at WHERE updated_at IS NULL")
                 )
+        # Eski/derlenmemis Delphi istemciler token gondermeden tarama tetikleyebiliyor;
+        # bu durumda user_id bilinmez, bu yuzden zorunlu olmaktan cikarildi.
+        user_id_column = next(
+            (column for column in inspector.get_columns("bot_logs") if column["name"] == "user_id"), None
+        )
+        if user_id_column is not None and not user_id_column["nullable"]:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE bot_logs ALTER COLUMN user_id DROP NOT NULL"))
 
 
 def get_db():

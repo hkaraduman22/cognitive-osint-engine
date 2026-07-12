@@ -9,7 +9,7 @@ class BotLogRepository:
         self.db = db
 
     def create(
-        self, user_id: int, query: str, status: str, search_history_id: int | None = None
+        self, user_id: int | None, query: str, status: str, search_history_id: int | None = None
     ) -> BotLog:
         log = BotLog(user_id=user_id, query=query, status=status, search_history_id=search_history_id)
         self.db.add(log)

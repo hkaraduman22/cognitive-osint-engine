@@ -10,7 +10,6 @@ from app.controllers.search_controller import router as search_router
 from app.routers.company_router import router as company_router
 from app.routers.log_router import router as log_router
 from app.routers.personnel_router import router as personnel_router
-from app.routers.scraper_router import router as scraper_router
 
 # Ensure database tables exist on startup
 models.Base.metadata.create_all(bind=engine)
@@ -31,7 +30,11 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(search_router, prefix="/api/v1/search", tags=["search"])
-app.include_router(scraper_router, prefix="/api/v1/scraper", tags=["scraper"])
+# NOT: /api/v1/scraper/scan (scraper_router) kasitli olarak mount edilmiyor.
+# search_history_id parametresi olmadan tarama tetikliyordu, bu yuzden urettigi
+# sonuclar hicbir aramada (GET /companies?arama_id=X) gorunmuyordu - kafa karistirici
+# ve gereksiz bir ikinci tarama yolu idi. Gercek/tam ozellikli tarama yolu:
+# POST /api/v1/companies/scan (company_router).
 app.include_router(company_router, prefix="/api/v1", tags=["companies"])
 app.include_router(personnel_router, prefix="/api/v1", tags=["personnel"])
 app.include_router(log_router, prefix="/api/v1", tags=["logs"])

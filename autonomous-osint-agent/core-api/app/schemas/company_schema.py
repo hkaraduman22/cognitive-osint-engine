@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import List, Optional
 
@@ -43,11 +44,35 @@ class CompanyCreate(BaseModel):
             raise ValueError("Firma adı boş olamaz.")
         return normalized
 
-    @field_validator("industry", "city", "address", "website", "phone", "email")
+    @field_validator("industry", "city", "address", "website", "email")
     @classmethod
     def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
+        normalized = " ".join(value.split())
+        return normalized or None
+
+    @field_validator("phone")
+    @classmethod
+    def normalize_phone(cls, value: Optional[str]) -> Optional[str]:
+        """
+        Kaynaklar (LLM, scraper) telefonu tutarsız formatlarda üretiyor
+        (parantez/tire/boşluk farklı yerlerde). Türkiye numarası olarak tanınabilirse
+        "+90 XXX XXX XX XX" formuna sabitler; tanınamazsa veriyi kaybetmemek için
+        sadece boşlukları sadeleştirip olduğu gibi bırakır.
+        """
+        if value is None:
+            return None
+
+        digits = re.sub(r"\D", "", value)
+        if digits.startswith("90") and len(digits) == 12:
+            digits = digits[2:]
+        elif digits.startswith("0") and len(digits) == 11:
+            digits = digits[1:]
+
+        if len(digits) == 10:
+            return f"+90 {digits[0:3]} {digits[3:6]} {digits[6:8]} {digits[8:10]}"
+
         normalized = " ".join(value.split())
         return normalized or None
 
