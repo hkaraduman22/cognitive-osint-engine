@@ -1,0 +1,125 @@
+import re
+from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from urllib.parse import urlparse
+
+
+class CompanyOfficialCreate(BaseModel):
+    full_name: str = Field(..., max_length=256)
+    title: str = Field(..., max_length=256)
+    linkedin_url: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CompanyCreatedOfficialResponse(BaseModel):
+    id: int
+    full_name: str
+    title: str
+    linkedin_url: Optional[str]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CompanyCreate(BaseModel):
+    name: str = Field(..., max_length=256)
+    industry: Optional[str] = Field(None, max_length=256)
+    city: Optional[str] = Field(None, max_length=128)
+    address: Optional[str] = Field(None, max_length=512)
+    website: Optional[str] = Field(None, max_length=512)
+    phone: Optional[str] = Field(None, max_length=64)
+    email: Optional[str] = Field(None, max_length=256)
+    source_url: Optional[str] = Field(None, max_length=1024)
+    confidence_score: int = Field(..., ge=85, le=100)
+    search_history_id: Optional[int] = Field(default=None, ge=1)
+    officials: Optional[List[CompanyOfficialCreate]] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Firma adı boş olamaz.")
+        return normalized
+
+    @field_validator("industry", "city", "address", "website", "email")
+    @classmethod
+    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        return normalized or None
+
+    @field_validator("phone")
+    @classmethod
+    def normalize_phone(cls, value: Optional[str]) -> Optional[str]:
+        """
+        Kaynaklar (LLM, scraper) telefonu tutarsız formatlarda üretiyor
+        (parantez/tire/boşluk farklı yerlerde). Türkiye numarası olarak tanınabilirse
+        "+90 XXX XXX XX XX" formuna sabitler; tanınamazsa veriyi kaybetmemek için
+        sadece boşlukları sadeleştirip olduğu gibi bırakır.
+        """
+        if value is None:
+            return None
+
+        digits = re.sub(r"\D", "", value)
+        if digits.startswith("90") and len(digits) == 12:
+            digits = digits[2:]
+        elif digits.startswith("0") and len(digits) == 11:
+            digits = digits[1:]
+
+        if len(digits) == 10:
+            return f"+90 {digits[0:3]} {digits[3:6]} {digits[6:8]} {digits[8:10]}"
+
+        normalized = " ".join(value.split())
+        return normalized or None
+
+    @field_validator("source_url")
+    @classmethod
+    def validate_source_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Kaynak URL http veya https adresi olmalıdır.")
+        return normalized
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CompanyOfficialResponse(BaseModel):
+    id: int
+    full_name: str
+    title: str
+    linkedin_url: Optional[str]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ScanStatusResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CompanyResponse(BaseModel):
+    id: int
+    name: str
+    industry: Optional[str]
+    city: Optional[str]
+    address: Optional[str]
+    website: Optional[str]
+    phone: Optional[str]
+    email: Optional[str]
+    source_url: Optional[str]
+    confidence_score: int
+    created_at: datetime
+    updated_at: datetime
+    officials: List[CompanyOfficialResponse]
+
+    model_config = ConfigDict(from_attributes=True)

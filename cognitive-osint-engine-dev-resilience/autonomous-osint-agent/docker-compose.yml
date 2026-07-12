@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: osintdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d osintdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: autonomous-osint-agent/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./core-api/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:password@postgres:5432/osintdb
+      QUEUE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+      OSINT_REDIS_QUEUE: osint_raw_queue
+      SCRAPER_BOT_PATH: /app/scraper-bot
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./core-api:/app/core-api
+      - ../scraper-bot:/app/scraper-bot:ro
+
+  worker:
+    build:
+      context: ..
+      dockerfile: autonomous-osint-agent/Dockerfile
+    command: ["python", "/app/redis_listener.py"]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./core-api/.env
+    environment:
+      QUEUE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+      OSINT_REDIS_QUEUE: osint_raw_queue
+      COMPANY_API_URL: http://api:8000/api/v1/companies
+    volumes:
+      - ../analiz.py:/app/analiz.py:ro
+      - ../redis_listener.py:/app/redis_listener.py:ro
+      - ../scraper-bot:/app/scraper-bot:ro
+
+volumes:
+  postgres_data:

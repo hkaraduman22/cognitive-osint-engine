@@ -1,0 +1,158 @@
+unit UResultsService;
+
+interface
+
+uses
+  System.SysUtils;
+
+type
+  EResultsServiceError = class(Exception);
+
+  TCompanyOfficialResult = record
+    Id: Integer;
+    FullName: string;
+    Title: string;
+    LinkedinUrl: string;
+  end;
+
+  TCompanyOfficialResults = TArray<TCompanyOfficialResult>;
+
+  TCompanyResult = record
+    Id: Integer;
+    Name: string;
+    Industry: string;
+    City: string;
+    Address: string;
+    Website: string;
+    Phone: string;
+    Email: string;
+    SourceUrl: string;
+    ConfidenceScore: Integer;
+    CreatedAt: string;
+    UpdatedAt: string;
+    Officials: TCompanyOfficialResults;
+  end;
+
+  TCompanyResults = TArray<TCompanyResult>;
+
+  TResultsService = class
+  public
+    function GetCompanies(const AAramaId: Integer; const ABearerToken: string): TCompanyResults;
+  end;
+
+implementation
+
+uses
+  System.JSON,
+  System.Net.HttpClient,
+  UHttpApiClient;
+
+function TResultsService.GetCompanies(const AAramaId: Integer; const ABearerToken: string): TCompanyResults;
+var
+  LClient: THttpApiClient;
+  LResponse: IHTTPResponse;
+  LJsonValue: TJSONValue;
+  LJsonArray: TJSONArray;
+  I: Integer;
+  LItem: TJSONValue;
+  LObj: TJSONObject;
+  LCompany: TCompanyResult;
+  LOfficialsArray: TJSONArray;
+  LOfficialValue: TJSONValue;
+  LOfficialObj: TJSONObject;
+  J: Integer;
+  function GetString(const AObject: TJSONObject; const AName: string): string;
+  var
+    LValue: TJSONValue;
+  begin
+    LValue := AObject.GetValue(AName);
+    if Assigned(LValue) then
+      Result := Trim(LValue.Value)
+    else
+      Result := '';
+  end;
+
+  function GetInt(const AObject: TJSONObject; const AName: string; const ADefault: Integer): Integer;
+  var
+    LValue: TJSONValue;
+  begin
+    LValue := AObject.GetValue(AName);
+    if not Assigned(LValue) then
+      Exit(ADefault);
+
+    if LValue is TJSONNumber then
+      Exit(TJSONNumber(LValue).AsInt);
+
+    Result := StrToIntDef(Trim(LValue.Value), ADefault);
+  end;
+begin
+  if AAramaId <= 0 then
+    raise EResultsServiceError.Create('arama_id gecersiz.');
+
+  if Trim(ABearerToken) = '' then
+    raise EResultsServiceError.Create('JWT token bulunamadi.');
+
+  LClient := THttpApiClient.Create;
+  try
+    LResponse := LClient.Get('/api/v1/companies?arama_id=' + IntToStr(AAramaId), ABearerToken);
+    if (LResponse.StatusCode < 200) or (LResponse.StatusCode >= 300) then
+      raise EResultsServiceError.CreateFmt('Results basarisiz. HTTP %d', [LResponse.StatusCode]);
+
+    LJsonValue := TJSONObject.ParseJSONValue(LResponse.ContentAsString(TEncoding.UTF8));
+    try
+      if not (LJsonValue is TJSONArray) then
+        raise EResultsServiceError.Create('Results yaniti dizi formatinda degil.');
+
+      LJsonArray := TJSONArray(LJsonValue);
+      SetLength(Result, LJsonArray.Count);
+
+      for I := 0 to LJsonArray.Count - 1 do
+      begin
+        LItem := LJsonArray.Items[I];
+        if not (LItem is TJSONObject) then
+          raise EResultsServiceError.Create('Results kayit formati gecersiz.');
+
+        LObj := TJSONObject(LItem);
+        LCompany.Id := GetInt(LObj, 'id', 0);
+        LCompany.Name := GetString(LObj, 'name');
+        LCompany.Industry := GetString(LObj, 'industry');
+        LCompany.City := GetString(LObj, 'city');
+        LCompany.Address := GetString(LObj, 'address');
+        LCompany.Website := GetString(LObj, 'website');
+        LCompany.Phone := GetString(LObj, 'phone');
+        LCompany.Email := GetString(LObj, 'email');
+        LCompany.SourceUrl := GetString(LObj, 'source_url');
+        LCompany.ConfidenceScore := GetInt(LObj, 'confidence_score', 0);
+        LCompany.CreatedAt := GetString(LObj, 'created_at');
+        LCompany.UpdatedAt := GetString(LObj, 'updated_at');
+
+        SetLength(LCompany.Officials, 0);
+        LOfficialValue := LObj.GetValue('officials');
+        if Assigned(LOfficialValue) and (LOfficialValue is TJSONArray) then
+        begin
+          LOfficialsArray := TJSONArray(LOfficialValue);
+          SetLength(LCompany.Officials, LOfficialsArray.Count);
+          for J := 0 to LOfficialsArray.Count - 1 do
+          begin
+            if not (LOfficialsArray.Items[J] is TJSONObject) then
+              Continue;
+
+            LOfficialObj := TJSONObject(LOfficialsArray.Items[J]);
+            LCompany.Officials[J].Id := GetInt(LOfficialObj, 'id', 0);
+            LCompany.Officials[J].FullName := GetString(LOfficialObj, 'full_name');
+            LCompany.Officials[J].Title := GetString(LOfficialObj, 'title');
+            LCompany.Officials[J].LinkedinUrl := GetString(LOfficialObj, 'linkedin_url');
+          end;
+        end;
+
+        Result[I] := LCompany;
+      end;
+    finally
+      LJsonValue.Free;
+    end;
+  finally
+    LClient.Free;
+  end;
+end;
+
+end.
