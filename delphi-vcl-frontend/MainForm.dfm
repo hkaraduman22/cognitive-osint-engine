@@ -102,4 +102,26 @@ object FrmMain: TFrmMain
     Height = 15
     Caption = 'Henuz arama yapilmadi.'
   end
+  object LblJobStatus: TLabel
+    Left = 24
+    Top = 444
+    Width = 98
+    Height = 15
+    Caption = 'Durum: bekleniyor'
+  end
+  object PrgScan: TProgressBar
+    Left = 24
+    Top = 468
+    Width = 400
+    Height = 20
+    TabOrder = 6
+    Visible = False
+  end
+  object PollTimer: TTimer
+    Enabled = False
+    Interval = 3000
+    OnTimer = PollTimerTimer
+    Left = 848
+    Top = 16
+  end
 end

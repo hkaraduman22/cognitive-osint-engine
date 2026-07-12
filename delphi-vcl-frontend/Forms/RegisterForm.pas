@@ -53,7 +53,7 @@ end;
 procedure TFrmRegister.BtnRegisterClick(Sender: TObject);
 var
   LAuthService: TAuthService;
-  LToken: string;
+  LAuthResult: TAuthResult;
   LPassword: string;
   LPasswordAgain: string;
 begin
@@ -68,8 +68,11 @@ begin
 
     LAuthService := TAuthService.Create;
     try
-      LToken := LAuthService.Register(Trim(EdtUsername.Text), LPassword);
-      TJwtTokenStore.SetToken(LToken);
+      LAuthResult := LAuthService.Register(Trim(EdtUsername.Text), LPassword);
+      TJwtTokenStore.SetToken(LAuthResult.AccessToken);
+      TJwtTokenStore.SetRefreshToken(LAuthResult.RefreshToken);
+      TJwtTokenStore.SetUsername(Trim(EdtUsername.Text));
+      TJwtTokenStore.PersistSession;
     finally
       LAuthService.Free;
     end;

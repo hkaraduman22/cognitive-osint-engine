@@ -39,6 +39,14 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
             existing_company.industry = company_in.industry
         if company_in.city is not None:
             existing_company.city = company_in.city
+        if company_in.address is not None:
+            existing_company.address = company_in.address
+        if company_in.website is not None:
+            existing_company.website = company_in.website
+        if company_in.phone is not None:
+            existing_company.phone = company_in.phone
+        if company_in.email is not None:
+            existing_company.email = company_in.email
         if company_in.source_url is not None:
             existing_company.source_url = company_in.source_url
         existing_company.confidence_score = max(
@@ -72,6 +80,10 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
         name=company_in.name,
         industry=company_in.industry,
         city=company_in.city,
+        address=company_in.address,
+        website=company_in.website,
+        phone=company_in.phone,
+        email=company_in.email,
         source_url=company_in.source_url,
         confidence_score=company_in.confidence_score,
     )

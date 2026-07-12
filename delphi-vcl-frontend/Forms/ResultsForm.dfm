@@ -11,6 +11,7 @@ object FrmResults: TFrmResults
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poMainFormCenter
+  OnCreate = FormCreate
   TextHeight = 15
   object LblTitle: TLabel
     Left = 24
@@ -64,12 +65,13 @@ object FrmResults: TFrmResults
     TabOrder = 2
     OnClick = BtnCloseClick
   end
-  object MemoResults: TMemo
+  object GridResults: TStringGrid
     Left = 24
     Top = 128
     Width = 732
     Height = 392
-    ScrollBars = ssVertical
     TabOrder = 3
+    ScrollBars = ssBoth
+    DefaultRowHeight = 22
   end
 end

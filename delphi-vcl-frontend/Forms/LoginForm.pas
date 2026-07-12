@@ -48,15 +48,18 @@ uses
 procedure TFrmLogin.BtnLoginClick(Sender: TObject);
 var
   LAuthService: TAuthService;
-  LToken: string;
+  LAuthResult: TAuthResult;
 begin
   SetBusy(True);
   try
     LblStatus.Caption := 'Giris yapiliyor...';
     LAuthService := TAuthService.Create;
     try
-      LToken := LAuthService.Login(Trim(EdtUsername.Text), EdtPassword.Text);
-      TJwtTokenStore.SetToken(LToken);
+      LAuthResult := LAuthService.Login(Trim(EdtUsername.Text), EdtPassword.Text);
+      TJwtTokenStore.SetToken(LAuthResult.AccessToken);
+      TJwtTokenStore.SetRefreshToken(LAuthResult.RefreshToken);
+      TJwtTokenStore.SetUsername(Trim(EdtUsername.Text));
+      TJwtTokenStore.PersistSession;
     finally
       LAuthService.Free;
     end;

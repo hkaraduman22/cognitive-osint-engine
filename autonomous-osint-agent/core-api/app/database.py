@@ -24,6 +24,29 @@ def ensure_mvp_schema() -> None:
                 text("UPDATE companies SET updated_at = created_at WHERE updated_at IS NULL")
             )
 
+    new_text_columns = {
+        "address": "VARCHAR(512)",
+        "website": "VARCHAR(512)",
+        "phone": "VARCHAR(64)",
+        "email": "VARCHAR(256)",
+    }
+    for column_name, column_type in new_text_columns.items():
+        if column_name not in column_names:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE companies ADD COLUMN {column_name} {column_type}"))
+
+    if "bot_logs" in inspector.get_table_names():
+        bot_log_columns = {column["name"] for column in inspector.get_columns("bot_logs")}
+        if "search_history_id" not in bot_log_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE bot_logs ADD COLUMN search_history_id INTEGER"))
+        if "updated_at" not in bot_log_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE bot_logs ADD COLUMN updated_at TIMESTAMP"))
+                connection.execute(
+                    text("UPDATE bot_logs SET updated_at = created_at WHERE updated_at IS NULL")
+                )
+
 
 def get_db():
     db = SessionLocal()

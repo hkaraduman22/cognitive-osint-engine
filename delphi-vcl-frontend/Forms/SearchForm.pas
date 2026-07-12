@@ -65,7 +65,7 @@ begin
     FSearchHistoryId := LResult.SearchHistoryId;
 
     LblStatus.Caption := 'Scan baslatiliyor...';
-    LScanResult := LSearchService.StartScan(FSearchQuery, FSearchHistoryId);
+    LScanResult := LSearchService.StartScan(FSearchQuery, FSearchHistoryId, TJwtTokenStore.GetToken);
     if LScanResult.Message <> '' then
       LblStatus.Caption := 'Scan baslatildi. ID: ' + IntToStr(FSearchHistoryId) + ' | ' + LScanResult.Message
     else

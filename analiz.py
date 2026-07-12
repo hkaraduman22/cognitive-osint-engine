@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -7,12 +8,13 @@ from datetime import date
 from typing import Any, List
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 try:
-    from groq import AsyncGroq
+    from groq import AsyncGroq, RateLimitError
 except ImportError:
     AsyncGroq = None
+    RateLimitError = Exception
 
 try:
     import httpx
@@ -30,11 +32,37 @@ class AnalizSonucu(BaseModel):
     name: str
     website: str | None = None
     location: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    email: str | None = None
     description: str | None = None
     source: str | None = None
     confidence_score: int = Field(ge=0, le=100)
     analiz_tarihi: str
     officials: List[OfficialGiris] = []
+
+    @field_validator("location", mode="before")
+    @classmethod
+    def normalize_location(cls, value: Any) -> str | None:
+        """
+        LLM 'location' alanını bazen dict olarak dönüyor (örn. {"city": "İstanbul", "district": "Kartal"}).
+        Pydantic sadece string kabul ettiği için bu durumda kayıt tamamen düşüyordu (validation error).
+        Burada dict'i "şehir, ilçe" formatında bir string'e çeviriyoruz; bilinmeyen bir şema gelirse
+        dict içindeki tüm basit değerleri birleştirerek veri kaybını en aza indiriyoruz.
+        """
+        if value is None or isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            city = value.get("city") or value.get("il") or value.get("sehir") or value.get("şehir")
+            district = value.get("district") or value.get("ilce") or value.get("ilçe")
+            parts = [str(part).strip() for part in (city, district) if part]
+            if parts:
+                return ", ".join(parts)
+            joined = ", ".join(
+                str(v).strip() for v in value.values() if isinstance(v, (str, int, float)) and str(v).strip()
+            )
+            return joined or None
+        return str(value)
 
 
 load_dotenv()
@@ -146,7 +174,12 @@ class AnalizMotoru:
         else:
             self.client = None
 
-        self.model: str = "llama-3.3-70b-versatile"
+        # KOTA DÜZELTMESİ: llama-3.3-70b-versatile'ın günlük token kotası demo sırasında doldu
+        # (Groq TPD limiti ayrı model bazında tutuluyor). 8b-instant hem ayrı bir kotaya sahip
+        # hem de çok daha az token tüketiyor, bu yüzden varsayılan model olarak seçildi.
+        self.model: str = "llama-3.1-8b-instant"
+        self.max_retries: int = 3
+        self.retry_base_delay_seconds: float = 3.0
         self.api_url: str = os.getenv("COMPANY_API_URL", "http://127.0.0.1:8000/api/v1/companies")
         self.api_key: str | None = os.getenv("COMPANY_API_KEY")
 
@@ -154,11 +187,16 @@ class AnalizMotoru:
         self.prompt_template: str = (
             "Web sitesinin ham metnini analiz et. Bu metinden şirketleri ve varsa bu şirketlerin yetkililerini, kurucularını veya emlak danışmanlarını bul. "
             "Her şirket için şu alanları içeren bir JSON array döndür:\n"
-            "name, website, location, description, source, confidence_score (0-100 arası) "
+            "name, website, location (yalnızca şehir/ilçe adı, düz metin olarak - asla obje/dict verme), "
+            "address (bulunabiliyorsa açık adres, düz metin), phone (bulunabiliyorsa telefon), "
+            "email (bulunabiliyorsa e-posta), description, source, confidence_score (0-100 arası) "
             "ve şirket yetkilileri için bir 'officials' listesi (içinde full_name và title olan objeler).\n\n"
+            "UYARI: location alanını asla obje/dict olarak döndürme, sadece düz metin (string) olarak ver.\n"
             "UYARI: Eğer metinde yetkili adı geçmiyorsa, 'officials' listesini boş bırakma! "
             "FastAPI doğrulaması için listeye otomatik olarak şu objeyi ekle: {\"full_name\": \"Belirtilmemiş\", \"title\": \"Bilinmeyen Unvan\"}.\n\n"
-            "Yalnızca JSON array döndür, açıklama yazma. Metin:\n[HAM_METIN]"
+            "Sonucu tek bir JSON NESNESİ (object) olarak, şu formatta döndür: "
+            "{\"companies\": [ ... ]} — companies değeri yukarıdaki şirket objelerinin dizisi olsun. "
+            "Başka hiçbir açıklama, madde işareti veya ek metin ekleme, sadece bu JSON nesnesini döndür. Metin:\n[HAM_METIN]"
         )
 
     def _clean_text_for_llm(self, raw_text: str) -> str:
@@ -172,7 +210,9 @@ class AnalizMotoru:
         text = re.sub(r"<[^>]+>", " ", text)
         text = re.sub(r"https?://\S+", " ", text)
         text = re.sub(r"\b(?:privacy policy|cookie policy)\b", " ", text, flags=re.IGNORECASE)
-        return re.sub(r"\s{2,}", " ", text).strip()[:15000]
+        # KOTA DÜZELTMESİ: 15000 karakter LLM'e gereksiz yere fazla token harcatıyordu,
+        # günlük kotayı hızla tüketiyordu. 4000 karakter analiz kalitesini büyük ölçüde korur.
+        return re.sub(r"\s{2,}", " ", text).strip()[:4000]
 
     def _build_fallback_result(self, reason: str) -> dict[str, Any]:
         """
@@ -184,6 +224,46 @@ class AnalizMotoru:
             "analiz_tarihi": date.today().isoformat(), "hata": reason,
             "officials": [{"full_name": "Belirtilmemiş", "title": "Bilinmeyen Unvan"}]
         }
+
+    @staticmethod
+    def _retry_after_seconds(error: "RateLimitError") -> float | None:
+        """Groq'un döndürdüğü retry-after header'ını okumaya çalışır (yoksa None döner)."""
+        try:
+            value = error.response.headers.get("retry-after")
+            return float(value) if value is not None else None
+        except Exception:
+            return None
+
+    async def _create_chat_completion_with_retry(self, full_prompt: str):
+        """
+        Groq'a istek atar; 429 (rate limit) alınırsa kısa aralıklarla birkaç kez tekrar dener.
+        Bu, dakikalık limit dalgalanmaları gibi geçici durumlarda veri kaybını azaltır.
+        Günlük (TPD) kota tamamen tükenmişse retry'lar da başarısız olur ve fallback'e düşülür.
+        """
+        last_error: Exception | None = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                return await self.client.chat.completions.create(
+                    messages=[
+                        {"role": "system",
+                         "content": "Sen bir OSINT veri analiz uzmanısın. Çıktı olarak sadece geçerli bir JSON array ver."},
+                        {"role": "user", "content": full_prompt}
+                    ],
+                    model=self.model,
+                    response_format={"type": "json_object"}
+                )
+            except RateLimitError as error:
+                last_error = error
+                if attempt >= self.max_retries:
+                    break
+                wait_seconds = self._retry_after_seconds(error) or (self.retry_base_delay_seconds * attempt)
+                wait_seconds = min(wait_seconds, 15.0)
+                logger.warning(
+                    "Groq rate limit alındı (deneme %s/%s), %.1f sn sonra tekrar denenecek.",
+                    attempt, self.max_retries, wait_seconds,
+                )
+                await asyncio.sleep(wait_seconds)
+        raise last_error
 
     async def analiz_et(
         self,
@@ -215,15 +295,7 @@ class AnalizMotoru:
                 + " üniversiteleri ve organize sanayi bölgesinin kendisini şirket olarak döndürme."
             )
 
-            response = await self.client.chat.completions.create(
-                messages=[
-                    {"role": "system",
-                     "content": "Sen bir OSINT veri analiz uzmanısın. Çıktı olarak sadece geçerli bir JSON array ver."},
-                    {"role": "user", "content": full_prompt}
-                ],
-                model=self.model,
-                response_format={"type": "json_object"}
-            )
+            response = await self._create_chat_completion_with_retry(full_prompt)
 
             content: str = response.choices[0].message.content.strip()
             data: Any = json.loads(content)
@@ -244,7 +316,21 @@ class AnalizMotoru:
 
             results: list[dict[str, Any]] = []
             if isinstance(data, list):
+                # SAĞLAMLIK DÜZELTMESİ: küçük model (8b-instant) bazen birden fazla şirketi
+                # tek bir öğede iç içe liste olarak döndürüyor (örn. [[{...},{...}]]). Bu veriyi
+                # kaybetmemek için tek seviye düzleştiriyoruz.
+                flattened_data: list[Any] = []
+                for entry in data:
+                    if isinstance(entry, list):
+                        flattened_data.extend(entry)
+                    else:
+                        flattened_data.append(entry)
+                data = flattened_data
+
                 for item in data:
+                    if not isinstance(item, dict):
+                        logger.warning("Düzleştirme sonrası hâlâ beklenmeyen öğe formatı atlandı: %r", item)
+                        continue
                     item["analiz_tarihi"] = date.today().isoformat()
 
                     # Eksik yetkili bilgilerinin şema doğrulaması için tamamlanması
@@ -309,8 +395,12 @@ class AnalizMotoru:
             for c in companies:
                 payload: dict[str, Any] = {
                     "name": c.get("name", "Bilinmeyen Firma"),
-                    "industry": c.get("description", "Avukat/Hukuk"),
-                    "city": c.get("location", "Denizli"),
+                    "industry": c.get("description"),
+                    "city": c.get("location"),
+                    "address": c.get("address"),
+                    "website": c.get("website"),
+                    "phone": c.get("phone"),
+                    "email": c.get("email"),
                     "confidence_score": c.get("confidence_score", 85),
                     "officials": c.get("officials", [{"full_name": "Belirtilmemiş", "title": "Bilinmeyen Unvan"}])
                 }

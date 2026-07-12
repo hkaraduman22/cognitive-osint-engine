@@ -18,10 +18,16 @@ type
     Message: string;
   end;
 
+  TScanStatusResult = record
+    Status: string;
+    Message: string;
+  end;
+
   TSearchService = class
   public
     function CreateSearch(const AQuery, ABearerToken: string): TSearchCreateResult;
-    function StartScan(const AQuery: string; const ASearchHistoryId: Integer): TScanStartResult;
+    function StartScan(const AQuery: string; const ASearchHistoryId: Integer; const ABearerToken: string): TScanStartResult;
+    function GetScanStatus(const ASearchHistoryId: Integer; const ABearerToken: string): TScanStatusResult;
   end;
 
 implementation
@@ -91,7 +97,7 @@ begin
   end;
 end;
 
-function TSearchService.StartScan(const AQuery: string; const ASearchHistoryId: Integer): TScanStartResult;
+function TSearchService.StartScan(const AQuery: string; const ASearchHistoryId: Integer; const ABearerToken: string): TScanStartResult;
 var
   LClient: THttpApiClient;
   LResponse: IHTTPResponse;
@@ -106,12 +112,15 @@ begin
   if ASearchHistoryId <= 0 then
     raise ESearchServiceError.Create('search_history_id gecersiz.');
 
+  if Trim(ABearerToken) = '' then
+    raise ESearchServiceError.Create('JWT token bulunamadi.');
+
   LPath := '/api/v1/companies/scan?query=' + TNetEncoding.URL.Encode(AQuery) +
     '&search_history_id=' + IntToStr(ASearchHistoryId);
 
   LClient := THttpApiClient.Create;
   try
-    LResponse := LClient.PostEmpty(LPath);
+    LResponse := LClient.PostEmpty(LPath, ABearerToken);
     if (LResponse.StatusCode < 200) or (LResponse.StatusCode >= 300) then
       raise ESearchServiceError.CreateFmt('Scan baslatma basarisiz. HTTP %d', [LResponse.StatusCode]);
 
@@ -129,6 +138,51 @@ begin
         Result.Status := '';
 
       if Assigned(LMessageValue) then
+        Result.Message := Trim(LMessageValue.Value)
+      else
+        Result.Message := '';
+    finally
+      LJsonValue.Free;
+    end;
+  finally
+    LClient.Free;
+  end;
+end;
+
+function TSearchService.GetScanStatus(const ASearchHistoryId: Integer; const ABearerToken: string): TScanStatusResult;
+var
+  LClient: THttpApiClient;
+  LResponse: IHTTPResponse;
+  LJsonValue: TJSONValue;
+  LStatusValue, LMessageValue: TJSONValue;
+begin
+  if ASearchHistoryId <= 0 then
+    raise ESearchServiceError.Create('search_history_id gecersiz.');
+
+  if Trim(ABearerToken) = '' then
+    raise ESearchServiceError.Create('JWT token bulunamadi.');
+
+  LClient := THttpApiClient.Create;
+  try
+    LResponse := LClient.Get(
+      '/api/v1/companies/scan-status?arama_id=' + IntToStr(ASearchHistoryId), ABearerToken);
+    if (LResponse.StatusCode < 200) or (LResponse.StatusCode >= 300) then
+      raise ESearchServiceError.CreateFmt('Durum sorgusu basarisiz. HTTP %d', [LResponse.StatusCode]);
+
+    LJsonValue := TJSONObject.ParseJSONValue(LResponse.ContentAsString(TEncoding.UTF8));
+    try
+      if not (LJsonValue is TJSONObject) then
+        raise ESearchServiceError.Create('Durum yaniti gecersiz.');
+
+      LStatusValue := TJSONObject(LJsonValue).GetValue('status');
+      LMessageValue := TJSONObject(LJsonValue).GetValue('message');
+
+      if Assigned(LStatusValue) then
+        Result.Status := Trim(LStatusValue.Value)
+      else
+        Result.Status := 'pending';
+
+      if Assigned(LMessageValue) and not (LMessageValue is TJSONNull) then
         Result.Message := Trim(LMessageValue.Value)
       else
         Result.Message := '';

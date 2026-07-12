@@ -26,6 +26,10 @@ class CompanyCreate(BaseModel):
     name: str = Field(..., max_length=256)
     industry: Optional[str] = Field(None, max_length=256)
     city: Optional[str] = Field(None, max_length=128)
+    address: Optional[str] = Field(None, max_length=512)
+    website: Optional[str] = Field(None, max_length=512)
+    phone: Optional[str] = Field(None, max_length=64)
+    email: Optional[str] = Field(None, max_length=256)
     source_url: Optional[str] = Field(None, max_length=1024)
     confidence_score: int = Field(..., ge=85, le=100)
     search_history_id: Optional[int] = Field(default=None, ge=1)
@@ -39,7 +43,7 @@ class CompanyCreate(BaseModel):
             raise ValueError("Firma adı boş olamaz.")
         return normalized
 
-    @field_validator("industry", "city")
+    @field_validator("industry", "city", "address", "website", "phone", "email")
     @classmethod
     def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -70,11 +74,23 @@ class CompanyOfficialResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ScanStatusResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CompanyResponse(BaseModel):
     id: int
     name: str
     industry: Optional[str]
     city: Optional[str]
+    address: Optional[str]
+    website: Optional[str]
+    phone: Optional[str]
+    email: Optional[str]
     source_url: Optional[str]
     confidence_score: int
     created_at: datetime

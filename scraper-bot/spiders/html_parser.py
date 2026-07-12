@@ -4,15 +4,14 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from typing import Optional, Dict, Any, List
 from core.interfaces import IHtmlParser
+from core.http_identity import build_headers, get_proxies
 
 
 class GeneralHtmlParser(IHtmlParser):
     """Web sayfalarından metin ve iletişim bilgilerini ayıklayan akıllı ve modüler sınıf."""
 
     def __init__(self):
-        self._headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0'
-        }
+        self._session = requests.Session()
         self._email_regex = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
         self._phone_regex = re.compile(
             r'(?<!\d)(?:\+90|0)\s*\(?\d{3}\)?\s*\d{3}\s*[\-\.]?\s*\d{2}\s*[\-\.]?\s*\d{2}(?!\d)')
@@ -37,7 +36,8 @@ class GeneralHtmlParser(IHtmlParser):
             deep_urls = self._find_deep_scan_urls(soup, url)
             for deep_url in deep_urls:
                 print(f"   [*] Derin Tarama (Deep Scan) başlatıldı: {deep_url}")
-                deep_soup = self._fetch_soup(deep_url)
+                # Referer'i bir onceki sayfa yaparak gercek gezinme davranisini taklit ediyoruz
+                deep_soup = self._fetch_soup(deep_url, referer=url)
                 if deep_soup:
                     deep_text = self._extract_xray_text(deep_soup)
                     emails.extend(self._extract_matches(self._email_regex, deep_text))
@@ -47,10 +47,17 @@ class GeneralHtmlParser(IHtmlParser):
         return self._format_results(phones, emails, raw_text)
 
 
-    def _fetch_soup(self, url: str) -> Optional[BeautifulSoup]:
-        """Sadece HTTP isteğini yapar ve BeautifulSoup objesi döner."""
+    def _fetch_soup(self, url: str, referer: Optional[str] = None) -> Optional[BeautifulSoup]:
+        """
+        HTTP isteğini yapar ve BeautifulSoup objesi döner. 403 (bot engeli) alınırsa
+        farklı bir UA/dil/referer/proxy kimliğiyle YALNIZCA BİR KEZ tekrar dener.
+        """
         try:
-            res = requests.get(url, headers=self._headers, timeout=10)
+            proxies = get_proxies()
+            res = self._session.get(url, headers=build_headers(referer=referer), proxies=proxies, timeout=10)
+            if res.status_code == 403:
+                print(f"   [~] 403 alındı, farklı kimlikle tekrar deneniyor: {url}")
+                res = self._session.get(url, headers=build_headers(referer=referer), proxies=proxies, timeout=10)
             if res.status_code == 200:
                 return BeautifulSoup(res.content, 'html.parser')
             else:

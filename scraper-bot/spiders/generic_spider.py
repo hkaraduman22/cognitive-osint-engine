@@ -1,8 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from core.interfaces import IUrlFetcher
+from core.http_identity import build_headers, get_proxies
 
 class GenericUrlFetcher(IUrlFetcher):
     """Konfigürasyon tabanlı, dinamik HTTP metotlarını destekleyen evrensel toplayıcı sınıf."""
@@ -11,10 +12,6 @@ class GenericUrlFetcher(IUrlFetcher):
         self._source_id = source_id
         self._config = config
         self._session = requests.Session()
-        self._headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-        }
 
     @property
     def source_id(self) -> str:
@@ -25,10 +22,31 @@ class GenericUrlFetcher(IUrlFetcher):
         init_url = self._config.get("init_url")
         if init_url:
             try:
-                self._session.get(init_url, headers=self._headers, timeout=10)
-                self._headers['Referer'] = init_url
+                self._session.get(init_url, headers=build_headers(), proxies=get_proxies(), timeout=10)
             except requests.exceptions.RequestException:
                 pass
+
+    def _request_with_identity_retry(
+        self, method: str, url: str, data: Optional[Dict[str, Any]] = None
+    ) -> requests.Response:
+        """
+        İsteği atar; 403 (bot engeli) alınırsa farklı bir UA/dil/referer/proxy
+        kimliğiyle YALNIZCA BİR KEZ tekrar dener (hızı korumak için döngü değil).
+        """
+        referer = self._config.get("init_url")
+        response = self._perform_request(method, url, build_headers(referer=referer), data)
+        if response.status_code == 403:
+            print(f"   [~] {self._source_id}: 403 alındı, farklı kimlikle tekrar deneniyor: {url}")
+            response = self._perform_request(method, url, build_headers(referer=referer), data)
+        return response
+
+    def _perform_request(
+        self, method: str, url: str, headers: Dict[str, str], data: Optional[Dict[str, Any]]
+    ) -> requests.Response:
+        proxies = get_proxies()
+        if method == "GET":
+            return self._session.get(url, headers=headers, proxies=proxies, timeout=10)
+        return self._session.post(url, headers=headers, data=data, proxies=proxies, timeout=10)
 
     def fetch(self, query: str) -> List[str]:
         self._initialize_session()
@@ -38,13 +56,13 @@ class GenericUrlFetcher(IUrlFetcher):
         try:
             if method == "GET":
                 target_url = base_url.replace("{query}", query)
-                response = self._session.get(target_url, headers=self._headers, timeout=10)
+                response = self._request_with_identity_retry("GET", target_url)
             elif method == "POST":
                 param_name = self._config.get("search_param", "q")
                 payload = {param_name: query}
                 if "extra_payload" in self._config:
                     payload.update(self._config["extra_payload"])
-                response = self._session.post(base_url, headers=self._headers, data=payload, timeout=10)
+                response = self._request_with_identity_retry("POST", base_url, payload)
             else:
                 return []
 

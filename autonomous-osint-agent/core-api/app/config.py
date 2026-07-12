@@ -9,6 +9,7 @@ class Settings:
     jwt_secret: str = os.getenv("JWT_SECRET", "supersecretchangeme")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     jwt_expiration_minutes: int = int(os.getenv("JWT_EXPIRATION_MINUTES", "60"))
+    refresh_token_expire_days: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
 
 settings = Settings()

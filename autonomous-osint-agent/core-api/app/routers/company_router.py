@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Background
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models.company import Company
-from app.schemas.company_schema import CompanyCreate, CompanyResponse
+from app.repositories.bot_log_repository import BotLogRepository
+from app.schemas.company_schema import CompanyCreate, CompanyResponse, ScanStatusResponse
 from app.services.company_service import create_elite_company, get_companies
 from app.utils.dependencies import get_current_user
 
@@ -38,11 +39,23 @@ def resolve_scraper_directory() -> Path:
     raise FileNotFoundError(f"scraper-bot dizini bulunamadı. Kontrol edilen yollar: {checked_paths}")
 
 
-def execute_real_scraper_bot(query: str, search_history_id: int | None = None) -> None:
+def execute_real_scraper_bot(query: str, user_id: int, search_history_id: int | None = None) -> None:
     """
-    Hedef arama botunu bagimsiz bir alt surec olarak arkada baslatan
-    ve ana sunucu bloklanmasini engelleyen yardimci fonksiyon.
+    Hedef arama botunu ayri bir alt surec olarak calistiran ve durumunu
+    (processing/finished/error) BotLog tablosuna yazan yardimci fonksiyon.
+    FastAPI BackgroundTasks icinde (istek/yanit dongusunden bagimsiz) calisir,
+    bu yuzden kendi DB oturumunu acip kapatir.
+
+    NOT: "finished" durumu yalnizca tarayici alt surecinin (URL toplama +
+    kuyruga yazma) bittigini gosterir. Asenkron LLM analizi (worker container)
+    ayri bir surectir ve bu adimdan sonra da devam edebilir; sonuclar bu yuzden
+    "finished" sonrasinda da veritabanina eklenmeye devam edebilir.
     """
+    db = SessionLocal()
+    bot_log_repository = BotLogRepository(db)
+    log_entry = bot_log_repository.create(
+        user_id=user_id, query=query, status="processing", search_history_id=search_history_id
+    )
     try:
         scraper_dir = resolve_scraper_directory()
 
@@ -52,10 +65,21 @@ def execute_real_scraper_bot(query: str, search_history_id: int | None = None) -
             command.extend(["--search-history-id", str(search_history_id)])
 
         logger.info(f"OSINT tarama botu baslatiliyor: {' '.join(command)}")
-        subprocess.Popen(command, cwd=str(scraper_dir))
+        result = subprocess.run(command, cwd=str(scraper_dir), timeout=180)
 
+        if result.returncode == 0:
+            bot_log_repository.update_status(log_entry.id, status="finished")
+        else:
+            bot_log_repository.update_status(
+                log_entry.id, status="error", message=f"Scraper çıkış kodu: {result.returncode}"
+            )
+    except subprocess.TimeoutExpired:
+        bot_log_repository.update_status(log_entry.id, status="error", message="Tarama zaman aşımına uğradı (180sn)")
     except Exception as exc:
         logger.error(f"Tarama botu alt sureci baslatilirken hata olustu: {exc}")
+        bot_log_repository.update_status(log_entry.id, status="error", message=str(exc))
+    finally:
+        db.close()
 
 
 @router.post("/companies/scan", status_code=status.HTTP_202_ACCEPTED)
@@ -63,14 +87,31 @@ def trigger_osint_scan(
     background_tasks: BackgroundTasks,
     query: Optional[str] = Query("Denizli Tekstil"),
     search_history_id: Optional[int] = Query(None, ge=1),
-) -> Dict[
-    str, str]:
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, str]:
     """
     Delphi arayuzunden gelen tarama istegini karsilayan ve
     sureci arkaplan gorevlerine devreden uc nokta.
     """
-    background_tasks.add_task(execute_real_scraper_bot, query, search_history_id)
+    background_tasks.add_task(execute_real_scraper_bot, query, current_user["id"], search_history_id)
     return {"status": "success", "message": "OSINT tarama islemi arkaplanda baslatildi."}
+
+
+@router.get("/companies/scan-status", response_model=ScanStatusResponse)
+def get_scan_status(
+    search_history_id: int = Query(..., alias="arama_id", ge=1),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ScanStatusResponse:
+    """
+    Delphi'nin polling ile sorgulayacağı, bir aramaya ait en son tarama
+    durumunu (processing/finished/error) döndüren uç nokta.
+    """
+    bot_log_repository = BotLogRepository(db)
+    log_entry = bot_log_repository.get_latest_by_search_history_id(search_history_id)
+    if log_entry is None:
+        return ScanStatusResponse(status="pending")
+    return ScanStatusResponse(status=log_entry.status, message=log_entry.message, updated_at=log_entry.updated_at)
 
 
 @router.post("/companies", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)

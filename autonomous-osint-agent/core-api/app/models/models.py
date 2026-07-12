@@ -24,6 +24,20 @@ class User(Base):
     searches = relationship("SearchHistory", back_populates="user", cascade="all, delete-orphan")
     records = relationship("Record", back_populates="created_by_user", cascade="all, delete-orphan")
     bot_logs = relationship("BotLog", back_populates="user", cascade="all, delete-orphan")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String(128), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    user = relationship("User", back_populates="refresh_tokens")
 
 
 class SearchHistory(Base):
@@ -57,10 +71,12 @@ class BotLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    search_history_id = Column(Integer, ForeignKey("search_history.id"), nullable=True, index=True)
     query = Column(String(512), nullable=False)
     status = Column(String(64), nullable=False)
     message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     user = relationship("User", back_populates="bot_logs")
 
