@@ -194,6 +194,36 @@ def configure_gemini() -> Optional[object]:
         return None
 
 
+def _clean_optional_str(value: object) -> Optional[str]:
+    """Bos/whitespace-only string'leri None'a normalize eder; None/eksik alan icin de None doner."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _normalize_officials(raw: object) -> list:
+    """Modelin dondurdugu 'officials' listesini schema'nin bekledigi sekle (full_name/title) tasir."""
+    if not isinstance(raw, list):
+        return []
+    normalized = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        full_name = _clean_optional_str(entry.get("full_name"))
+        if not full_name:
+            continue
+        official = {
+            "full_name": full_name,
+            "title": _clean_optional_str(entry.get("title")) or "Unvan Belirtilmemiş",
+        }
+        linkedin_url = _clean_optional_str(entry.get("linkedin_url"))
+        if linkedin_url:
+            official["linkedin_url"] = linkedin_url
+        normalized.append(official)
+    return normalized
+
+
 def post_company_to_api(payload: dict) -> Tuple[bool, int]:
     headers = {"Content-Type": "application/json"}
     if COMPANY_API_KEY:
@@ -296,7 +326,14 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
         "8) Sorguyla ilgisi olmayan hicbir sirketi dondurme. 5 dogru sonuc, 20 yanlis sonuctan daha degerlidir. "
         "\n\n"
         "JSON disinda hicbir sey yazma. "
-        "Her sirket icin yalnizca su alanlari dondur: name, industry, city, confidence. "
+        "Her sirket icin su alanlari dondur: name, industry, city, confidence_score, "
+        "address (metinde aciklanan acik adres varsa, yoksa null), "
+        "website (metinde geciyorsa, yoksa null), "
+        "phone (metinde geciyorsa, yoksa null), "
+        "email (metinde geciyorsa, yoksa null), "
+        "ve sirket yetkilileri icin bir 'officials' listesi (icinde full_name ve title olan objeler; "
+        "yetkili bilgisi yoksa bos liste []). "
+        "Metinde acikca bulunmayan alanlari ASLA tahmin etme veya uydurma; bulunamayan alani null birak. "
         "Uygun aday yoksa yalnizca bos JSON dondur: {}"
     )
 
@@ -364,7 +401,14 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
     name = parsed.get("name")
     city = parsed.get("city")
     industry = parsed.get("industry")
-    confidence = parsed.get("confidence_score")
+    address = _clean_optional_str(parsed.get("address"))
+    website = _clean_optional_str(parsed.get("website"))
+    phone = _clean_optional_str(parsed.get("phone"))
+    email = _clean_optional_str(parsed.get("email"))
+    officials = _normalize_officials(parsed.get("officials"))
+    # Model bazen "confidence_score" yerine eski "confidence" adini kullanabiliyor;
+    # backend sozlesmesi confidence_score bekledigi icin geriye donuk uyumlulukla okunuyor.
+    confidence = parsed.get("confidence_score", parsed.get("confidence"))
 
     logger.info("[Listener] Company name=%s", name)
 
@@ -382,9 +426,21 @@ def process_message(model, redis_client, queue_name: str, raw_message: str) -> N
 
     if confidence >= 85:
         logger.info("[Listener] Confidence passed=True")
-        payload = {"name": name, "city": city, "industry": industry, "confidence_score": confidence, "officials": []}
+        payload = {
+            "name": name,
+            "city": city,
+            "industry": industry,
+            "confidence_score": confidence,
+            "address": address,
+            "website": website,
+            "phone": phone,
+            "email": email,
+            "officials": officials,
+        }
         if search_history_id is not None:
             payload["search_history_id"] = search_history_id
+        if target_url:
+            payload["source_url"] = target_url
         ok, status = post_company_to_api(payload)
         if ok:
             logger.info("Elit veri API'ye gönderildi (status=%s): %s", status, name)
