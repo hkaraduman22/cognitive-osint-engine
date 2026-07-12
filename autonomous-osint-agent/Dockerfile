@@ -9,6 +9,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 
 COPY autonomous-osint-agent/core-api/ ./core-api/
 COPY scraper-bot/ ./scraper-bot/
+COPY analiz.py ./analiz.py
+COPY redis_listener.py ./redis_listener.py
 WORKDIR /app/core-api
 
 EXPOSE 8000

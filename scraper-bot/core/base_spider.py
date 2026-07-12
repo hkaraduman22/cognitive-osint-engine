@@ -6,7 +6,12 @@ class BaseSpider:
         self._parser = parser
         self._storage = storage
 
-    def run(self, query: str, search_history_id: int | None = None) -> None:
+    def run(
+        self,
+        query: str,
+        search_history_id: int | None = None,
+        search_query: str | None = None,
+    ) -> None:
         print(f"[*] '{self._fetcher.source_id}' araniyor...")
         urls = self._fetcher.fetch(query)
 
@@ -22,6 +27,8 @@ class BaseSpider:
                     },
                     "ham_metin": parsed_data.get("ham_metin", "")
                 }
+                if search_query:
+                    payload["search_query"] = search_query
                 if search_history_id is not None:
                     payload["search_history_id"] = search_history_id
                 self._storage.save(payload)

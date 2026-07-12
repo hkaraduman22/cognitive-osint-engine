@@ -40,6 +40,7 @@ def test_scraper_payload_reaches_analysis_engine() -> None:
         "İstanbul merkezli CNC freze üreticisi.",
         search_history_id=42,
         source_url="https://example.com",
+        search_query=None,
     )
     assert result["kaynak"] == "test_source"
     assert result["search_history_id"] == 42

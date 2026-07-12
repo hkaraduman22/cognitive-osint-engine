@@ -2,7 +2,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from analiz import AnalizMotoru
+from analiz import AnalizMotoru, is_relevant_company
 
 
 def _response(content: str) -> SimpleNamespace:
@@ -78,3 +78,55 @@ def test_empty_text_does_not_call_llm() -> None:
 
     assert result[0]["hata"] == "Boş metin"
     motor.client.chat.completions.create.assert_not_called()
+
+
+def test_quality_filter_accepts_matching_istanbul_cnc_company() -> None:
+    company = {
+        "name": "Else Makine Kalıp Sanayi",
+        "description": "CNC freze ve kalıp imalatı",
+        "location": "Başakşehir / İstanbul",
+    }
+
+    assert is_relevant_company(
+        company,
+        "İstanbul CNC freze üreticileri",
+        "https://www.elsemakine.com.tr/",
+    )
+
+
+def test_quality_filter_rejects_wrong_city_and_job_platforms() -> None:
+    wrong_city = {
+        "name": "Altıkardeşler CNC",
+        "description": "CNC freze ve makine sanayi",
+        "location": "Çayırova / Kocaeli",
+    }
+    job_platform = {
+        "name": "Jobsavior",
+        "description": "CNC freze iş arama platformu",
+        "location": "İstanbul",
+    }
+
+    assert not is_relevant_company(
+        wrong_city,
+        "İstanbul CNC freze üreticileri",
+        "https://altikardeslercnc.com/",
+    )
+    assert not is_relevant_company(
+        job_platform,
+        "İstanbul CNC freze üreticileri",
+        "https://tr.jobsavior.com/ilanlar/cnc",
+    )
+
+
+def test_quality_filter_rejects_public_institutions() -> None:
+    chamber = {
+        "name": "Ankara Ticaret Odası",
+        "description": "Ankara savunma sanayi komitesi",
+        "location": "Ankara",
+    }
+
+    assert not is_relevant_company(
+        chamber,
+        "Ankara savunma sanayi",
+        "https://www.atonet.org.tr/",
+    )

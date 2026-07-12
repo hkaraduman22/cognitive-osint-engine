@@ -50,6 +50,7 @@ async def process_queue_message(data_json: str, ai_engine: AnalizMotoru) -> dict
             ham_metin,
             search_history_id=data.get("search_history_id"),
             source_url=data.get("hedef_url"),
+            search_query=data.get("search_query"),
         ),
     }
 

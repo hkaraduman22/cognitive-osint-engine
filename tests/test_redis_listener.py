@@ -29,6 +29,7 @@ def test_plain_text_message_is_supported() -> None:
         "Düz firma metni",
         search_history_id=None,
         source_url=None,
+        search_query=None,
     )
 
 

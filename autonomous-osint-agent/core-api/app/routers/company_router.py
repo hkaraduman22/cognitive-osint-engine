@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import logging
+from pathlib import Path
 from typing import Optional, List, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -17,15 +18,33 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def resolve_scraper_directory() -> Path:
+    """Scraper dizinini Windows çalışma alanında veya Docker container'ında bulur."""
+    configured_path = os.getenv("SCRAPER_BOT_PATH")
+    candidates: list[Path] = []
+    if configured_path:
+        candidates.append(Path(configured_path))
+
+    current_file = Path(__file__).resolve()
+    candidates.extend(parent / "scraper-bot" for parent in current_file.parents)
+    candidates.append(Path("/app/scraper-bot"))
+
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.is_dir() and (resolved / "main.py").is_file():
+            return resolved
+
+    checked_paths = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(f"scraper-bot dizini bulunamadı. Kontrol edilen yollar: {checked_paths}")
+
+
 def execute_real_scraper_bot(query: str, search_history_id: int | None = None) -> None:
     """
     Hedef arama botunu bagimsiz bir alt surec olarak arkada baslatan
     ve ana sunucu bloklanmasini engelleyen yardimci fonksiyon.
     """
     try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.abspath(os.path.join(current_dir, "../../../../"))
-        scraper_dir = os.path.join(project_root, "scraper-bot")
+        scraper_dir = resolve_scraper_directory()
 
         python_executable = sys.executable
         command = [python_executable, "main.py", "--sorgu", query]
@@ -33,7 +52,7 @@ def execute_real_scraper_bot(query: str, search_history_id: int | None = None) -
             command.extend(["--search-history-id", str(search_history_id)])
 
         logger.info(f"OSINT tarama botu baslatiliyor: {' '.join(command)}")
-        subprocess.Popen(command, cwd=scraper_dir)
+        subprocess.Popen(command, cwd=str(scraper_dir))
 
     except Exception as exc:
         logger.error(f"Tarama botu alt sureci baslatilirken hata olustu: {exc}")

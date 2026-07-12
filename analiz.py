@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from datetime import date
 from typing import Any, List
 
@@ -46,6 +47,95 @@ _core_api_env = os.path.join(
 if os.path.exists(_core_api_env):
     load_dotenv(_core_api_env, override=False)
 logger = logging.getLogger("AnalizMotoru")
+
+KNOWN_LOCATIONS = {
+    "adana", "adiyaman", "afyonkarahisar", "agri", "aksaray", "amasya",
+    "ankara", "antalya", "ardahan", "artvin", "aydin", "balikesir",
+    "bartin", "batman", "bayburt", "bilecik", "bingol", "bitlis", "bolu",
+    "burdur", "bursa", "canakkale", "cankiri", "corum", "denizli",
+    "diyarbakir", "duzce", "edirne", "elazig", "erzincan", "erzurum",
+    "eskisehir", "gaziantep", "giresun", "gumushane", "hakkari", "hatay",
+    "igdir", "isparta", "istanbul", "izmir", "kahramanmaras", "karabuk",
+    "karaman", "kars", "kastamonu", "kayseri", "kilis", "kirikkale",
+    "kirklareli", "kirsehir", "kocaeli", "konya", "kutahya", "malatya",
+    "manisa", "mardin", "mersin", "mugla", "mus", "nevsehir", "nigde",
+    "ordu", "osmaniye", "rize", "sakarya", "samsun", "siirt", "sinop",
+    "sivas", "sanliurfa", "sirnak", "tekirdag", "tokat", "trabzon",
+    "tunceli", "usak", "van", "yalova", "yozgat", "zonguldak",
+    "avcilar", "basaksehir", "beylikduzu", "cankaya", "pendik", "sincan",
+}
+
+BLOCKED_ENTITY_TERMS = {
+    "jobsavior", "kariyer", "eleman net", "takvim", "haritayer", "nato",
+    "ticaret odasi", "sanayi odasi", "belediye", "bakanligi", "universite",
+    "cumhurbaskanligi", "baskanligi", "dernegi", "ihracatcilari birligi",
+    "organize sanayi bolgesi", "osb", "is ilanlari", "is arama platformu",
+}
+
+BLOCKED_SOURCE_DOMAINS = {
+    "jobsavior.com", "kariyer.net", "eleman.net", "takvim.com.tr",
+    "haritayer.com", "wikipedia.org", "linkedin.com", "indeed.com",
+}
+
+QUERY_STOP_WORDS = {
+    "firma", "firmalari", "firmasi", "sirket", "sirketleri", "ureticileri",
+    "ureticisi", "hizmet", "sektor", "sektoru", "sanayi", "servisleri",
+    "servisi", "ve", "ile", "icin",
+}
+
+
+def _normalize_text(value: str | None) -> str:
+    if not value:
+        return ""
+    folded = value.casefold().replace("ı", "i")
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    )
+
+
+def _extract_requested_location(search_query: str | None) -> str | None:
+    query_tokens = set(re.findall(r"[a-z0-9]+", _normalize_text(search_query)))
+    return next((location for location in KNOWN_LOCATIONS if location in query_tokens), None)
+
+
+def _extract_sector_keywords(search_query: str | None) -> set[str]:
+    normalized_query = _normalize_text(search_query)
+    location = _extract_requested_location(search_query)
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", normalized_query)
+        if len(token) >= 3 and token != location and token not in QUERY_STOP_WORDS
+    }
+
+
+def is_relevant_company(
+    company: dict[str, Any],
+    search_query: str | None,
+    source_url: str | None,
+) -> bool:
+    """LLM sonucunu şehir, sektör ve firma türü kurallarıyla doğrular."""
+    normalized_name = _normalize_text(company.get("name"))
+    normalized_description = _normalize_text(company.get("description"))
+    normalized_location = _normalize_text(company.get("location"))
+    normalized_source = _normalize_text(source_url)
+    entity_text = f"{normalized_name} {normalized_description}"
+
+    if any(term in entity_text for term in BLOCKED_ENTITY_TERMS):
+        return False
+    if any(domain in normalized_source for domain in BLOCKED_SOURCE_DOMAINS):
+        return False
+
+    requested_location = _extract_requested_location(search_query)
+    if requested_location and requested_location not in normalized_location:
+        return False
+
+    sector_keywords = _extract_sector_keywords(search_query)
+    if sector_keywords and not any(keyword in entity_text for keyword in sector_keywords):
+        return False
+
+    return bool(normalized_name)
 
 
 class AnalizMotoru:
@@ -100,6 +190,7 @@ class AnalizMotoru:
         ham_metin: str,
         search_history_id: int | None = None,
         source_url: str | None = None,
+        search_query: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Gelen ham metni temizler, Groq API üzerinden LLM analizine gönderir ve doğrulanmış sonuçları döner.
@@ -116,7 +207,13 @@ class AnalizMotoru:
         try:
             # KRİTİK HATA DÜZELTMESİ: .format() yerine güvenli .replace() kullanılarak
             # metindeki JS/CSS süslü parantezlerinin format motorunu çökertmesi kalıcı olarak engellenmiştir.
-            full_prompt: str = self.prompt_template.replace("[HAM_METIN]", cleaned_text)
+            full_prompt = (
+                self.prompt_template.replace("[HAM_METIN]", cleaned_text)
+                + f"\n\nKullanıcı arama sorgusu: {search_query or 'Belirtilmedi'}"
+                + "\nYalnızca sorgudaki şehir ve faaliyet alanıyla doğrudan eşleşen gerçek şirketleri döndür."
+                + " İş ilanı ve haber sitelerini, kamu kurumlarını, odaları, dernekleri,"
+                + " üniversiteleri ve organize sanayi bölgesinin kendisini şirket olarak döndürme."
+            )
 
             response = await self.client.chat.completions.create(
                 messages=[
@@ -163,7 +260,15 @@ class AnalizMotoru:
                     try:
                         # Pydantic şema doğrulaması (Validation)
                         valid_data = AnalizSonucu(**item)
-                        results.append(valid_data.model_dump())
+                        validated_item = valid_data.model_dump()
+                        if is_relevant_company(validated_item, search_query, source_url):
+                            results.append(validated_item)
+                        else:
+                            logger.info(
+                                "Sonuç kalite filtresinde elendi: %s (sorgu=%s)",
+                                validated_item.get("name"),
+                                search_query,
+                            )
                     except Exception as val_err:
                         logger.warning(f"Format hatası nedeniyle öğe atlandı: {val_err}")
                         continue
