@@ -194,20 +194,12 @@ end;
 procedure TAdminForm.LoadUserSearchHistory(const AUserId: Integer);
 var
   LService: TAdminService;
-  LMethod: TRttiMethod;
-  LContext: TRttiContext;
-  LType: TRttiType;
-  LResult: TValue;
+  LResult: TAdminUserSearchHistoryItems;
 begin
   LService := TAdminService.Create;
   try
-    LType := LContext.GetType(LService.ClassType);
-    LMethod := LType.GetMethod('GetUserSearchHistory');
-    if not Assigned(LMethod) then
-      raise Exception.Create('GetUserSearchHistory fonksiyonu bulunamadi.');
-
-    LResult := LMethod.Invoke(LService, [AUserId]);
-    FillSearchHistoryGridFromValue(LResult);
+    LResult := LService.GetUserSearchHistory(TJwtTokenStore.GetToken, AUserId);
+    FillSearchHistoryGridFromValue(TValue.From<TAdminUserSearchHistoryItems>(LResult));
   finally
     LService.Free;
   end;

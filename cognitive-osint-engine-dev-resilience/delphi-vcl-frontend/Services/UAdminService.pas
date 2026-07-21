@@ -18,9 +18,20 @@ type
 
   TAdminUserItems = TArray<TAdminUserItem>;
 
+  TAdminUserSearchHistoryItem = record
+    SearchHistoryId: Integer;
+    Query: string;
+    Status: string;
+    CompanyCount: Integer;
+    CreatedAt: string;
+  end;
+
+  TAdminUserSearchHistoryItems = TArray<TAdminUserSearchHistoryItem>;
+
   TAdminService = class
   public
     function GetUsers(const ABearerToken: string): TAdminUserItems;
+    function GetUserSearchHistory(const ABearerToken: string; const AUserId: Integer): TAdminUserSearchHistoryItems;
   end;
 
 implementation
@@ -112,6 +123,55 @@ begin
         Result[I].Username := JsonGetString(LObj, 'username');
         Result[I].Email := JsonGetString(LObj, 'email');
         Result[I].IsAdmin := JsonGetBool(LObj, 'is_admin', False);
+        Result[I].CreatedAt := JsonGetString(LObj, 'created_at');
+      end;
+    finally
+      LJsonValue.Free;
+    end;
+  finally
+    LClient.Free;
+  end;
+end;
+
+function TAdminService.GetUserSearchHistory(const ABearerToken: string; const AUserId: Integer): TAdminUserSearchHistoryItems;
+var
+  LClient: THttpApiClient;
+  LResponse: IHTTPResponse;
+  LJsonValue: TJSONValue;
+  LArray: TJSONArray;
+  LObj: TJSONObject;
+  I: Integer;
+begin
+  if Trim(ABearerToken) = '' then
+    raise EAdminServiceError.Create('JWT token bulunamadi.');
+
+  if AUserId <= 0 then
+    raise EAdminServiceError.Create('Kullanici ID gecersiz.');
+
+  LClient := THttpApiClient.Create;
+  try
+    LResponse := LClient.Get('/api/v1/admin/users/' + IntToStr(AUserId) + '/search-history', ABearerToken);
+    if (LResponse.StatusCode < 200) or (LResponse.StatusCode >= 300) then
+      raise EAdminServiceError.CreateFmt('Admin search history basarisiz. HTTP %d', [LResponse.StatusCode]);
+
+    LJsonValue := TJSONObject.ParseJSONValue(LResponse.ContentAsString(TEncoding.UTF8));
+    try
+      if not (LJsonValue is TJSONArray) then
+        raise EAdminServiceError.Create('Admin search history yaniti dizi formatinda degil.');
+
+      LArray := TJSONArray(LJsonValue);
+      SetLength(Result, LArray.Count);
+
+      for I := 0 to LArray.Count - 1 do
+      begin
+        if not (LArray.Items[I] is TJSONObject) then
+          raise EAdminServiceError.Create('Admin search history kayit formati gecersiz.');
+
+        LObj := TJSONObject(LArray.Items[I]);
+        Result[I].SearchHistoryId := JsonGetInt(LObj, 'search_history_id', 0);
+        Result[I].Query := JsonGetString(LObj, 'query');
+        Result[I].Status := JsonGetString(LObj, 'status');
+        Result[I].CompanyCount := JsonGetInt(LObj, 'company_count', 0);
         Result[I].CreatedAt := JsonGetString(LObj, 'created_at');
       end;
     finally

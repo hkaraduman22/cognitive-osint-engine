@@ -1,97 +1,121 @@
 object FrmRegister: TFrmRegister
   Left = 0
   Top = 0
-  BorderStyle = bsDialog
+  BorderStyle = bsSingle
   Caption = 'Yeni Kayit'
-  ClientHeight = 336
-  ClientWidth = 420
-  Color = clBtnFace
+  ClientHeight = 360
+  ClientWidth = 470
+  Color = clWhite
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
-  Font.Height = -12
+  Font.Height = -13
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poMainFormCenter
-  TextHeight = 15
+  TextHeight = 17
   object LblTitle: TLabel
-    Left = 24
-    Top = 20
-    Width = 117
-    Height = 28
+    Left = 28
+    Top = 24
+    Width = 146
+    Height = 33
     Caption = 'Yeni Hesap'
     Font.Charset = DEFAULT_CHARSET
-    Font.Color = clWindowText
-    Font.Height = -21
+    Font.Color = $00A0522D
+    Font.Height = -24
     Font.Name = 'Segoe UI'
     Font.Style = [fsBold]
     ParentFont = False
   end
   object LblUsername: TLabel
-    Left = 24
-    Top = 72
-    Width = 72
-    Height = 15
+    Left = 28
+    Top = 84
+    Width = 97
+    Height = 17
     Caption = 'Kullanici adi'
+    Font.Color = $00808080
   end
   object LblPassword: TLabel
-    Left = 24
-    Top = 128
-    Width = 28
-    Height = 15
+    Left = 28
+    Top = 150
+    Width = 38
+    Height = 17
     Caption = 'Sifre'
+    Font.Color = $00808080
   end
   object LblPasswordAgain: TLabel
-    Left = 24
-    Top = 184
-    Width = 84
-    Height = 15
+    Left = 28
+    Top = 216
+    Width = 105
+    Height = 17
     Caption = 'Sifre (tekrar)'
+    Font.Color = $00808080
   end
   object LblStatus: TLabel
-    Left = 24
-    Top = 296
-    Width = 43
-    Height = 15
+    Left = 28
+    Top = 316
+    Width = 46
+    Height = 17
     Caption = 'Durum:'
+    Font.Color = $00606060
   end
   object EdtUsername: TEdit
-    Left = 24
-    Top = 92
-    Width = 372
-    Height = 23
+    Left = 28
+    Top = 106
+    Width = 414
+    Height = 27
+    BorderStyle = bsSingle
+    Color = clWhite
+    Font.Height = -12
     TabOrder = 0
   end
   object EdtPassword: TEdit
-    Left = 24
-    Top = 148
-    Width = 372
-    Height = 23
+    Left = 28
+    Top = 172
+    Width = 414
+    Height = 27
+    BorderStyle = bsSingle
+    Color = clWhite
+    Font.Height = -12
     PasswordChar = '*'
     TabOrder = 1
   end
   object EdtPasswordAgain: TEdit
-    Left = 24
-    Top = 204
-    Width = 372
-    Height = 23
+    Left = 28
+    Top = 238
+    Width = 414
+    Height = 27
+    BorderStyle = bsSingle
+    Color = clWhite
+    Font.Height = -12
     PasswordChar = '*'
     TabOrder = 2
   end
   object BtnRegister: TButton
-    Left = 24
-    Top = 248
-    Width = 120
-    Height = 32
+    Left = 28
+    Top = 276
+    Width = 140
+    Height = 34
     Caption = 'Kayit Ol'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWhite
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Style = [fsBold]
+    ParentFont = False
     TabOrder = 3
     OnClick = BtnRegisterClick
   end
   object BtnCancel: TButton
-    Left = 152
-    Top = 248
-    Width = 120
-    Height = 32
+    Left = 184
+    Top = 276
+    Width = 140
+    Height = 34
     Caption = 'Vazgec'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Style = []
     TabOrder = 4
     OnClick = BtnCancelClick
   end
