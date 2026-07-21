@@ -65,11 +65,13 @@ services:
     env_file:
       - ./core-api/.env
     environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:password@postgres:5432/osintdb
       QUEUE_BACKEND: redis
       REDIS_URL: redis://redis:6379/0
       OSINT_REDIS_QUEUE: osint_raw_queue
       COMPANY_API_URL: http://api:8000/api/v1/companies
     volumes:
+      - ./core-api:/app/autonomous-osint-agent/core-api:ro
       - ../analiz.py:/app/analiz.py:ro
       - ../redis_listener.py:/app/redis_listener.py:ro
       - ../scraper-bot:/app/scraper-bot:ro

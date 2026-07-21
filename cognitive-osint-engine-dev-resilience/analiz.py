@@ -359,12 +359,9 @@ class AnalizMotoru:
                         logger.warning(f"Format hatası nedeniyle öğe atlandı: {val_err}")
                         continue
 
-            # Sadece 85 puan ve üzeri olan yüksek nitelikli elit şirketlerin filtrelenmesi
-            elites: list[dict[str, Any]] = [item for item in results if item.get("confidence_score", 0) >= 85]
-
-            if elites and self.api_url:
+            if results and self.api_url:
                 await self._post_companies_to_api_async(
-                    elites,
+                    results,
                     search_history_id=search_history_id,
                     source_url=source_url,
                 )
