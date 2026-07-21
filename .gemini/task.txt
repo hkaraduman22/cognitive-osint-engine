@@ -1,0 +1,266 @@
+Müşteri bulma yazılımı .   İstediğiniz sistemin genel amacı (belirli bir sektördeki firma ve kişileri tespit edip filtrelenebilir hale getirmek) meşrudur. Ancak "güvenlik bariyerlerine takılmadan çalışan botlar", "LinkedIn, Instagram vb. platformların korumalarını aşan sistemler" geliştirilmesi; platformların kullanım şartlarını ihlal etmeye veya koruma mekanizmalarını atlatmaya yönelik teknikler içerdiğinden bu konuda görev tanımı hazırlayamam. LinkedIn başta olmak üzere birçok platform, otomatik veri toplama ve scraping botlarını açıkça yasaklamaktadır. Ayrıca kişisel verilerin toplanması ve işlenmesi KVKK/GDPR gibi düzenlemelere de tabidir. ([Embers][1])
+
+Aşağıdaki görev tanımı ise tamamen yasal veri kaynakları, açık kaynak istihbaratı (OSINT), firma web siteleri, resmi dizinler ve izin verilen API'ler üzerine kurulmuştur.
+
+---
+
+# Stajyer Projesi
+
+## Akıllı Firma ve Profesyonel Rehberi Sistemi (OSINT Tabanlı)
+
+### Projenin Amacı
+
+Belirlenen sektörlerde faaliyet gösteren firmaları ve bu firmalarda görev yapan karar vericileri tespit eden, açık kaynaklardan bilgileri toplayan, doğrulayan ve filtrelenebilir hale getiren profesyonel bir veri toplama sistemi geliştirilmesi.
+
+---
+
+# Beklenen Çıktılar
+
+Sistem aşağıdaki bilgileri mümkün olduğunca otomatik şekilde toplayacaktır.
+
+## Firma Bilgileri
+
+* Firma adı
+* Sektör
+* Alt sektör
+* Faaliyet alanı
+* Firma büyüklüğü
+* Ülke
+* Şehir
+* Web sitesi
+* Telefon
+* Genel e-posta
+* Adres
+* Harita konumu
+* Kuruluş yılı
+* Açıklama
+
+---
+
+## Firma Yetkilileri
+
+Her firma için mümkün olduğunca;
+
+* Genel Müdür
+* CEO
+* CTO
+* Satış Müdürü
+* Satın Alma Müdürü
+* Fabrika Müdürü
+* Ar-Ge Müdürü
+* Üretim Müdürü
+* İş Geliştirme Müdürü
+* Teknik Müdür
+
+tespit edilecektir.
+
+---
+
+## Kişi Bilgileri
+
+Yalnızca herkese açık olarak yayımlanmış bilgiler:
+
+* Ad Soyad
+* Ünvan
+* Çalıştığı firma
+* Çalışma alanı
+* Şehir
+* Ülke
+* Resmi profil bağlantıları
+* Kurumsal e-posta (yayınlanmışsa)
+* Kurumsal telefon (yayınlanmışsa)
+
+---
+
+# Veri Kaynakları
+
+Sistem aşağıdaki açık kaynaklardan bilgi toplayacaktır.
+
+* Firma web siteleri
+* Ticaret odaları
+* Organize Sanayi Bölgeleri
+* Resmi firma rehberleri
+* Kamu kurumlarının açık verileri
+* Basın bültenleri
+* Haber siteleri
+* Kariyer sayfaları
+* Fuar katılımcı listeleri
+* Firma iletişim sayfaları
+* İzin verilen API'ler ve RSS kaynakları
+
+---
+
+# Sistem Mimarisi
+
+## 1. Firma Bulucu
+
+Görevleri
+
+* Sektöre göre firma listesi oluşturma
+* Yinelenen firmaları kaldırma
+* Firma kategorilerini belirleme
+
+---
+
+## 2. Firma Tarayıcı
+
+Görevleri
+
+* Firma web sitesini analiz etme
+* İletişim bilgilerini çıkarma
+* Hakkımızda sayfasını analiz etme
+* Yönetim kadrosunu bulma
+
+---
+
+## 3. Kariyer Analiz Modülü
+
+Görevleri
+
+* Açık iş ilanlarını inceleme
+* Departmanları çıkarma
+* Organizasyon yapısını tahmin etme
+
+---
+
+## 4. Haber Analiz Modülü
+
+Görevleri
+
+* Firma haberlerini inceleme
+* Yeni yöneticileri tespit etme
+* Yeni yatırımları belirleme
+
+---
+
+## 5. Veri Doğrulama Modülü
+
+Her bilgi için;
+
+* Güven puanı
+* Kaynak sayısı
+* Son güncelleme tarihi
+* Doğrulama durumu
+
+oluşturulacaktır.
+
+---
+
+# Veritabanı
+
+## Firmalar
+
+* FirmaID
+* Firma Adı
+* Sektör
+* Alt Sektör
+* Web Sitesi
+* Telefon
+* E-posta
+* Adres
+* Şehir
+* Ülke
+* Açıklama
+* Güncellenme Tarihi
+
+---
+
+## Kişiler
+
+* KişiID
+* Ad Soyad
+* Ünvan
+* FirmaID
+* Şehir
+* Ülke
+* Kurumsal E-posta
+* Kurumsal Telefon
+* Profil Bağlantıları (varsa)
+* Güven Puanı
+
+---
+
+# Arama Özellikleri
+
+Kullanıcı aşağıdaki kriterlere göre filtreleme yapabilecektir.
+
+* Firma adı
+* Sektör
+* Alt sektör
+* Şehir
+* Ülke
+* Firma büyüklüğü
+* Ünvan
+* Yönetici seviyesi
+* Faaliyet alanı
+* Anahtar kelime
+* Kuruluş yılı
+
+---
+
+# Gelişmiş Filtreler
+
+Örneğin;
+
+* Ankara'daki otomotiv firmaları
+* 500'den fazla çalışanı olan firmalar
+* CTO bulunan yazılım firmaları
+* Son 6 ayda yatırım yapan firmalar
+* İhracat yapan firmalar
+* Ar-Ge merkezi bulunan firmalar
+
+---
+
+# Raporlama
+
+Sistem aşağıdaki raporları oluşturacaktır.
+
+* Sektörel analiz
+* Bölgesel analiz
+* Firma dağılımı
+* Yönetici dağılımı
+* Yeni bulunan firmalar
+* Güncellenen kayıtlar
+* Eksik bilgi raporu
+* Veri kalite raporu
+
+---
+
+# Yönetim Paneli
+
+* Veri güncelleme
+* Kaynak yönetimi
+* Tarama zamanlayıcısı
+* Hata kayıtları
+* Kullanıcı yetkilendirme
+* Log sistemi
+* Performans istatistikleri
+
+---
+
+# Kullanılabilecek Teknolojiler
+
+* Delphi (Masaüstü Yönetim Paneli)
+* Python (Veri toplama servisleri)
+* PostgreSQL veya SQLite
+* REST API
+* Elasticsearch (Hızlı arama)
+* Redis (Önbellek)
+* Docker (Servis yönetimi)
+
+---
+
+#   Beklenen Kazanımlar
+
+* Veri toplama (OSINT) teknikleri
+* REST API geliştirme
+* Web veri işleme
+* HTML ayrıştırma
+* NLP ile metin analizi
+* Veritabanı tasarımı
+* Arama motoru geliştirme
+* Veri doğrulama algoritmaları
+* Performans optimizasyonu
+* Yazılım mimarisi ve mikro servis yaklaşımı
+
+Bu kapsam, gerçek bir ticari "B2B firma ve profesyonel rehberi" geliştirmek için uygundur ve platformların güvenlik önlemlerini aşmaya yönelik yöntemler yerine, yasal ve izin verilen veri kaynaklarına dayanacak şekilde tasarlanmıştır

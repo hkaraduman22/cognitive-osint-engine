@@ -16,36 +16,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def execute_real_scraper_bot(query: str) -> None:
-    """
-    Hedef arama botunu bagimsiz bir alt surec olarak arkada baslatan
-    ve ana sunucu bloklanmasini engelleyen yardimci fonksiyon.
-    """
-    try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.abspath(os.path.join(current_dir, "../../../../"))
-        scraper_dir = os.path.join(project_root, "scraper-bot")
-
-        python_executable = sys.executable
-        command = [python_executable, "main.py", "--sorgu", query]
-
-        logger.info(f"OSINT tarama botu baslatiliyor: {' '.join(command)}")
-        subprocess.Popen(command, cwd=scraper_dir)
-
-    except Exception as exc:
-        logger.error(f"Tarama botu alt sureci baslatilirken hata olustu: {exc}")
-
-
-@router.post("/companies/scan", status_code=status.HTTP_202_ACCEPTED)
-def trigger_osint_scan(background_tasks: BackgroundTasks, query: Optional[str] = Query("Denizli Tekstil")) -> Dict[
-    str, str]:
-    """
-    Delphi arayuzunden gelen tarama istegini karsilayan ve
-    sureci arkaplan gorevlerine devreden uc nokta.
-    """
-    background_tasks.add_task(execute_real_scraper_bot, query)
-    return {"status": "success", "message": "OSINT tarama islemi arkaplanda baslatildi."}
-
 
 @router.post("/companies", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)
 def create_company(company: CompanyCreate, db: Session = Depends(get_db)) -> Company:

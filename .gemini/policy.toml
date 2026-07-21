@@ -1,0 +1,7 @@
+[[rules]]
+name = "block_env_reading"
+decision = "deny"
+
+[rules.conditions]
+toolName = "read_file"
+"arguments.path" = ".*\\.env.*"

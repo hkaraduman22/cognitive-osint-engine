@@ -6,28 +6,10 @@ from sqlalchemy.orm import Session
 from app.repositories.search_repository import SearchRepository
 from app.models.models import Record, SearchHistory
 
-# 'scraper-bot' klasörünün yukarı doğru taranarak dinamik ve güvenli şekilde bulunması
-_current_dir = os.path.dirname(os.path.abspath(__file__))
-_project_root = None
-
-while _current_dir and _current_dir != os.path.dirname(_current_dir):
-    # Eğer mevcut dizinde 'scraper-bot' klasörü varsa, ana proje kök dizini bulunmuştur
-    if os.path.exists(os.path.join(_current_dir, "scraper-bot")):
-        _project_root = _current_dir
-        break
-    # Bir üst dizine geçiş yap
-    _current_dir = os.path.dirname(_current_dir)
-
-# 'core' ve 'spiders' paketlerini barındıran 'scraper-bot' yolunun sys.path'e eklenmesi
-if _project_root:
-    _scraper_bot_path = os.path.join(_project_root, "scraper-bot")
-    if _scraper_bot_path not in sys.path:
-        sys.path.insert(0, _scraper_bot_path)
-
 # OSINT motoru bileşenlerinin (core ve spiders) sorunsuz şekilde dahil edilmesi
-from core.storage import RedisDataStorage
-from core.coordinator import DataDrivenCoordinator
-from spiders.html_parser import GeneralHtmlParser
+from app.scraper.core.storage import RedisDataStorage
+from app.scraper.core.coordinator import DataDrivenCoordinator
+from app.scraper.spiders.html_parser import GeneralHtmlParser
 
 logger = logging.getLogger(__name__)
 

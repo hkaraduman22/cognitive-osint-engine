@@ -1,155 +1,373 @@
 object frmMain: TfrmMain
   Left = 0
   Top = 0
-  Caption = 'Ak'#305'll'#305' OSINT Firma Rehberi - Code Freeze (v1.0)'
-  ClientHeight = 700
-  ClientWidth = 1000
-  Color = clBtnFace
+  Caption = 'Cognitive OSINT Engine - B2B Intelligence'
+  ClientHeight = 750
+  ClientWidth = 1200
+  Color = 16382457
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
-  Font.Height = -12
+  Font.Height = -14
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poScreenCenter
+  OnClose = FormClose
   OnCreate = FormCreate
-  PixelsPerInch = 96
-  TextHeight = 15
-  object edtSehir: TEdit
-    Left = 16
-    Top = 16
-    Width = 150
-    Height = 23
+  TextHeight = 19
+  object pnlLogin: TPanel
+    Left = 0
+    Top = 0
+    Width = 1200
+    Height = 750
+    Align = alClient
+    BevelOuter = bvNone
+    Color = 16382457
+    ParentBackground = False
     TabOrder = 0
-    TextHint = 'Sehir (Orn: Ankara)'
+    object pnlLoginBox: TPanel
+      Left = 400
+      Top = 200
+      Width = 400
+      Height = 350
+      BevelOuter = bvNone
+      Color = clWhite
+      ParentBackground = False
+      TabOrder = 0
+      object lblLoginTitle: TLabel
+        Left = 0
+        Top = 40
+        Width = 400
+        Height = 30
+        Alignment = taCenter
+        AutoSize = False
+        Caption = 'G'#252'venli Sisteme Giri'#351
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = 3026478
+        Font.Height = -21
+        Font.Name = 'Segoe UI Semibold'
+        Font.Style = []
+        ParentFont = False
+      end
+      object edtUsername: TEdit
+        Left = 50
+        Top = 110
+        Width = 300
+        Height = 33
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -16
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+        TabOrder = 0
+        TextHint = '  Kullan'#305'c'#305' Ad'#305
+      end
+      object edtPassword: TEdit
+        Left = 50
+        Top = 165
+        Width = 300
+        Height = 33
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -16
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+        PasswordChar = '*'
+        TabOrder = 1
+        TextHint = '  '#350'ifre'
+      end
+      object btnLogin: TButton
+        Left = 50
+        Top = 230
+        Width = 140
+        Height = 45
+        Caption = 'Giri'#351' Yap'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -15
+        Font.Name = 'Segoe UI Semibold'
+        Font.Style = []
+        ParentFont = False
+        TabOrder = 2
+        OnClick = btnLoginClick
+      end
+      object btnRegister: TButton
+        Left = 210
+        Top = 230
+        Width = 140
+        Height = 45
+        Caption = 'Kay'#305't Ol'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -15
+        Font.Name = 'Segoe UI Semibold'
+        Font.Style = []
+        ParentFont = False
+        TabOrder = 3
+        OnClick = btnRegisterClick
+      end
+    end
   end
-  object cmbSektor: TComboBox
-    Left = 180
-    Top = 16
-    Width = 150
-    Height = 23
-    TabOrder = 1
-    Text = 'Sektor Seciniz'
-  end
-  object cmbCalisanSayisi: TComboBox
-    Left = 345
-    Top = 16
-    Width = 120
-    Height = 23
-    TabOrder = 2
-    Text = 'Calisan Sayisi'
-  end
-  object edtMinPuan: TEdit
-    Left = 480
-    Top = 16
-    Width = 100
-    Height = 23
-    TabOrder = 3
-    TextHint = 'Min Puan (85)'
-  end
-  object chkSadeceYatirimAlanlar: TCheckBox
-    Left = 600
-    Top = 19
-    Width = 120
-    Height = 17
-    Caption = 'Yatirim Alanlar'
-    TabOrder = 4
-  end
-  object btnAra: TButton
-    Left = 730
-    Top = 15
-    Width = 100
-    Height = 25
-    Caption = 'Vitrin Ara'
-    TabOrder = 5
-    OnClick = btnAraClick
-  end
-  object btnTaramaBaslat: TButton
-    Left = 840
-    Top = 15
-    Width = 140
-    Height = 25
-    Caption = 'OSINT Taramasi Baslat'
-    TabOrder = 6
-    OnClick = btnTaramaBaslatClick
-  end
-  object btnAnalizGetir: TButton
-    Left = 16
-    Top = 45
-    Width = 964
-    Height = 25
-    Caption = 'Sektorel Dagilim Analizini Getir (Grafik)'
-    TabOrder = 7
-    OnClick = btnAnalizGetirClick
-  end
-  object dbgSonuclar: TDBGrid
-    Left = 16
-    Top = 80
-    Width = 964
-    Height = 350
-    DataSource = dsSonuclar
-    Options = [dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgRowSelect, dgConfirmDelete, dgCancelOnExit, dgTitleClick, dgTitleHotTrack]
-    TabOrder = 8
-    TitleFont.Charset = DEFAULT_CHARSET
-    TitleFont.Color = clWindowText
-    TitleFont.Height = -12
-    TitleFont.Name = 'Segoe UI'
-    TitleFont.Style = []
-    OnDblClick = dbgSonuclarDblClick
-  end
-  object mmoLoglar: TMemo
-    Left = 16
-    Top = 440
-    Width = 473
-    Height = 240
-    Color = clBlack
-    Font.Charset = ANSI_CHARSET
-    Font.Color = clLime
-    Font.Height = -12
-    Font.Name = 'Consolas'
+  object pgcMain: TPageControl
+    Left = 0
+    Top = 0
+    Width = 1200
+    Height = 750
+    ActivePage = tsRecherche
+    Align = alClient
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -15
+    Font.Name = 'Segoe UI Semibold'
     Font.Style = []
     ParentFont = False
-    ReadOnly = True
-    ScrollBars = ssVertical
-    TabOrder = 9
-  end
-  object chtSektor: TChart
-    Left = 507
-    Top = 440
-    Width = 473
-    Height = 240
-    Title.Text.Strings = (
-      'Sektor Dagilimi')
-    View3DOptions.Elevation = 315
-    View3DOptions.Orthogonal = False
-    View3DOptions.Perspective = 0
-    View3DOptions.Rotation = 360
-    TabOrder = 10
-    DefaultCanvas = 'TGDIPlusCanvas'
-    ColorPaletteIndex = 13
+    TabOrder = 1
+    Visible = False
+    object tsRecherche: TTabSheet
+      Caption = '   Ara & Ke'#351'fet   '
+      object pnlFiltreler: TPanel
+        Left = 0
+        Top = 0
+        Width = 280
+        Height = 718
+        Align = alLeft
+        BevelOuter = bvNone
+        Color = 15724527
+        ParentBackground = False
+        TabOrder = 0
+        object lblFiltreBaslik: TLabel
+          Left = 20
+          Top = 25
+          Width = 240
+          Height = 25
+          AutoSize = False
+          Caption = 'Filtreleme Se'#231'enekleri'
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = 3026478
+          Font.Height = -17
+          Font.Name = 'Segoe UI Bold'
+          Font.Style = []
+          ParentFont = False
+        end
+        object lblBotBaslik: TLabel
+          Left = 20
+          Top = 430
+          Width = 240
+          Height = 25
+          AutoSize = False
+          Caption = 'Canl'#305' Veri Toplama'
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = 3026478
+          Font.Height = -17
+          Font.Name = 'Segoe UI Bold'
+          Font.Style = []
+          ParentFont = False
+        end
+        object edtSehir: TEdit
+          Left = 20
+          Top = 75
+          Width = 240
+          Height = 28
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -15
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+          TabOrder = 0
+          TextHint = '  '#350'ehir (Orn: '#304'stanbul)'
+        end
+        object cmbSektor: TComboBox
+          Left = 20
+          Top = 125
+          Width = 240
+          Height = 28
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -15
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+          TabOrder = 1
+          TextHint = '  Sekt'#246'r (Orn: Yaz'#305'l'#305'm)'
+        end
+        object edtUnvan: TEdit
+          Left = 20
+          Top = 175
+          Width = 240
+          Height = 28
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -15
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+          TabOrder = 6
+          TextHint = '  '#220'nvan / Pozisyon (Orn: CTO)'
+        end
+        object cmbCalisanSayisi: TComboBox
+          Left = 20
+          Top = 225
+          Width = 240
+          Height = 28
+          Style = csDropDownList
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -15
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+          TabOrder = 2
+        end
+        object chkSadeceYatirimAlanlar: TCheckBox
+          Left = 20
+          Top = 280
+          Width = 240
+          Height = 20
+          Caption = 'Sadece Yat'#305'r'#305'm Alanlar'
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -15
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+          TabOrder = 3
+        end
+        object btnAra: TButton
+          Left = 20
+          Top = 330
+          Width = 240
+          Height = 45
+          Caption = 'Veritaban'#305'nda Ara'
+          TabOrder = 4
+          OnClick = btnAraClick
+        end
+        object btnTaramaBaslat: TButton
+          Left = 20
+          Top = 470
+          Width = 240
+          Height = 55
+          Caption = 'OSINT Botunu Tetikle'
+          TabOrder = 5
+          OnClick = btnTaramaBaslatClick
+        end
+      end
+      object dbgSonuclar: TDBGrid
+        Left = 280
+        Top = 0
+        Width = 912
+        Height = 715
+        Align = alClient
+        BorderStyle = bsNone
+        Color = clWhite
+        DataSource = dsSonuclar
+        DrawingStyle = gdsClassic
+        FixedColor = clWhite
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        Options = [dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgRowSelect, dgConfirmDelete, dgCancelOnExit, dgTitleClick, dgTitleHotTrack]
+        ParentFont = False
+        TabOrder = 1
+        TitleFont.Charset = DEFAULT_CHARSET
+        TitleFont.Color = clWindowText
+        TitleFont.Height = -15
+        TitleFont.Name = 'Segoe UI Semibold'
+        TitleFont.Style = []
+        OnDblClick = dbgSonuclarDblClick
+      end
+    end
+    object tsIstatistik: TTabSheet
+      Caption = '   Sekt'#246'rel '#304'statistikler   '
+      ImageIndex = 1
+      object pnlIstatistikTop: TPanel
+        Left = 0
+        Top = 0
+        Width = 1192
+        Height = 80
+        Align = alTop
+        BevelOuter = bvNone
+        Color = clWhite
+        ParentBackground = False
+        TabOrder = 0
+        object btnAnalizGetir: TButton
+          Left = 30
+          Top = 20
+          Width = 220
+          Height = 40
+          Caption = 'Raporu Getir'
+          TabOrder = 0
+          OnClick = btnAnalizGetirClick
+        end
+      end
+      object mmoIstatistik: TMemo
+        Left = 0
+        Top = 80
+        Width = 1192
+        Height = 638
+        Align = alClient
+        Color = 16382457
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = 3026478
+        Font.Height = -16
+        Font.Name = 'Consolas'
+        Font.Style = []
+        ParentFont = False
+        ReadOnly = True
+        ScrollBars = ssVertical
+        TabOrder = 1
+      end
+    end
+    object tsLoglar: TTabSheet
+      Caption = '   Sistem Loglar'#305'   '
+      ImageIndex = 2
+      object mmoLoglar: TMemo
+        Left = 0
+        Top = 0
+        Width = 1192
+        Height = 718
+        Align = alClient
+        Color = 1184274
+        Font.Charset = ANSI_CHARSET
+        Font.Color = clLime
+        Font.Height = -15
+        Font.Name = 'Consolas'
+        Font.Style = []
+        ParentFont = False
+        ReadOnly = True
+        ScrollBars = ssBoth
+        TabOrder = 0
+      end
+    end
   end
   object RestClient: TRESTClient
     BaseURL = 'http://localhost:8000/api/v1'
     Params = <>
-    Left = 32
-    Top = 120
+    SynchronizedEvents = False
+    Left = 56
+    Top = 536
   end
   object RestRequest: TRESTRequest
     Client = RestClient
     Params = <>
     Response = RestResponse
-    Left = 104
-    Top = 120
+    SynchronizedEvents = False
+    Left = 144
+    Top = 536
   end
   object RestResponse: TRESTResponse
-    Left = 184
-    Top = 120
+    Left = 232
+    Top = 536
   end
   object RestAdapter: TRESTResponseDataSetAdapter
     Dataset = MemTableSonuclar
     FieldDefs = <>
     Response = RestResponse
-    Left = 272
-    Top = 120
+    Left = 56
+    Top = 592
   end
   object MemTableSonuclar: TFDMemTable
     FetchOptions.AssignedValues = [evMode]
@@ -159,23 +377,24 @@ object frmMain: TfrmMain
     UpdateOptions.AssignedValues = [uvCheckRequired, uvAutoCommitUpdates]
     UpdateOptions.CheckRequired = False
     UpdateOptions.AutoCommitUpdates = True
-    Left = 376
-    Top = 120
+    Left = 144
+    Top = 592
   end
   object dsSonuclar: TDataSource
     DataSet = MemTableSonuclar
-    Left = 472
-    Top = 120
+    Left = 232
+    Top = 592
   end
   object RestReqStats: TRESTRequest
     Client = RestClient
     Params = <>
     Response = RestResStats
-    Left = 104
-    Top = 184
+    SynchronizedEvents = False
+    Left = 144
+    Top = 648
   end
   object RestResStats: TRESTResponse
-    Left = 184
-    Top = 184
+    Left = 232
+    Top = 648
   end
 end

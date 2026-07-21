@@ -11,6 +11,18 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
 
     if existing_company:
         existing_company.industry = company_in.industry
+        existing_company.sub_industry = company_in.sub_industry
+        existing_company.field_of_activity = company_in.field_of_activity
+        existing_company.company_size = company_in.company_size
+        existing_company.country = company_in.country
+        existing_company.website = company_in.website
+        existing_company.phone = company_in.phone
+        existing_company.email = company_in.email
+        existing_company.address = company_in.address
+        existing_company.map_location = company_in.map_location
+        existing_company.foundation_year = company_in.foundation_year
+        existing_company.source = company_in.source
+        existing_company.description = company_in.description
         existing_company.confidence_score = company_in.confidence_score
 
         if company_in.officials is not None:
@@ -20,7 +32,13 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
                     CompanyOfficial(
                         full_name=official_in.full_name,
                         title=official_in.title,
+                        field_of_work=official_in.field_of_work,
+                        city=official_in.city,
+                        country=official_in.country,
+                        email=official_in.email,
+                        phone=official_in.phone,
                         linkedin_url=official_in.linkedin_url,
+                        confidence_score=official_in.confidence_score,
                     )
                 )
 
@@ -32,7 +50,19 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
     company = Company(
         name=company_in.name,
         industry=company_in.industry,
+        sub_industry=company_in.sub_industry,
+        field_of_activity=company_in.field_of_activity,
+        company_size=company_in.company_size,
+        country=company_in.country,
         city=company_in.city,
+        website=company_in.website,
+        phone=company_in.phone,
+        email=company_in.email,
+        address=company_in.address,
+        map_location=company_in.map_location,
+        foundation_year=company_in.foundation_year,
+        source=company_in.source,
+        description=company_in.description,
         confidence_score=company_in.confidence_score,
     )
 
@@ -42,7 +72,13 @@ def create_elite_company(db: Session, company_in: CompanyCreate) -> Company:
                 CompanyOfficial(
                     full_name=official_in.full_name,
                     title=official_in.title,
+                    field_of_work=official_in.field_of_work,
+                    city=official_in.city,
+                    country=official_in.country,
+                    email=official_in.email,
+                    phone=official_in.phone,
                     linkedin_url=official_in.linkedin_url,
+                    confidence_score=official_in.confidence_score,
                 )
             )
 
